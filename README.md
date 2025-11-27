@@ -1,17 +1,11 @@
-# capstone25-tripgpt
 
-## Travel Destination Homepage
+  # Travel Destination Homepage
 
-This is a code bundle for a Travel Recommendation Homepage.  
-The original prototype design is available at:  
-https://www.figma.com/design/oIPef0kKzvLhKbB4ntMKNj/Travel-Destination-Homepage
+  This is a code bundle for Travel Destination Homepage. The original project is available at https://www.figma.com/design/oIPef0kKZvLhkHb4ntMKNj/Travel-Destination-Homepage.
 
----
+  ## Running the code
 
-## 🚀 How to Run the Code
+  Run `npm i` to install the dependencies.
 
-**Install dependencies**
-```bash
-npm i
-
-npm run dev
+  Run `npm run dev` to start the development server.
+  

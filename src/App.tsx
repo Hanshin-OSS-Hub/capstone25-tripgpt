@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { DestinationCard } from "./components/DestinationCard";
 import { LoginDialog } from "./components/LoginDialog";
 import { SignupDialog } from "./components/SignupDialog";
+import { MyPageDialog } from "./components/MyPageDialog";
 import { SearchBar } from "./components/SearchBar";
 import { ChatInput } from "./components/ChatInput";
 import { AttractionDetailDialog } from "./components/AttractionDetailDialog";
@@ -959,6 +960,7 @@ const attractionsByRegion: { [key: string]: any[] } = {
 export default function App() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isSignupOpen, setIsSignupOpen] = useState(false);
+  const [isMyPageOpen, setIsMyPageOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchedRegion, setSearchedRegion] = useState(""); // 실제 검색된 지역명 저장
@@ -996,21 +998,21 @@ export default function App() {
     setIsLoginOpen(true);
   };
 
-  const handleSearch = () => {
-    if (!currentUser) {
-      toast.error("로그인이 필요합니다.");
-      setIsLoginOpen(true);
-      return;
-    }
+  const handleUserUpdate = (updatedUser: any) => {
+    setCurrentUser(updatedUser);
+  };
 
+  const handleMyPageClick = () => {
+    setIsMyPageOpen(true);
+  };
+
+  const handleSearch = () => {
     if (!searchKeyword.trim()) {
       toast.error("검색어를 입력해주세요.");
       return;
     }
 
     setHasSearched(true);
-    setFilterKeywords([]);
-    setFilteredResults([]);
 
     // 검색어와 일치하는 지역의 관광지 찾기
     const keyword = searchKeyword.trim();
@@ -1019,10 +1021,77 @@ export default function App() {
     if (results.length === 0) {
       toast.error(`"${keyword}"에 대한 검색 결과가 없습니다.`);
       setSearchResults([]);
+      setFilterKeywords([]);
+      setFilteredResults([]);
     } else {
-      // 점수가 높은 순서대로 정렬
-      const sortedResults = [...results].sort((a, b) => b.score - a.score);
-      toast.success(`${keyword}의 관광지 ${sortedResults.length}개를 찾았습니다.`);
+      // 사용자가 로그인했고 선호 키워드가 있는 경우
+      let sortedResults = [...results];
+      let preferredKeywords: string[] = [];
+      
+      if (currentUser && currentUser.email) {
+        const savedKeywords = localStorage.getItem(`tripgpt_keywords_${currentUser.email}`);
+        if (savedKeywords) {
+          preferredKeywords = JSON.parse(savedKeywords);
+          
+          if (preferredKeywords.length > 0) {
+            // 선호 키워드와 매칭되는 관광지와 아닌 관광지 분리
+            const matched = sortedResults.filter((attraction) =>
+              preferredKeywords.some((keyword: string) =>
+                attraction.tags.some((tag: string) => 
+                  tag.includes(keyword) || keyword.includes(tag)
+                )
+              )
+            );
+
+            const unmatched = sortedResults.filter((attraction) =>
+              !preferredKeywords.some((keyword: string) =>
+                attraction.tags.some((tag: string) => 
+                  tag.includes(keyword) || keyword.includes(tag)
+                )
+              )
+            );
+
+            // 각 그룹 내에서 점수순 정렬
+            const matchedSorted = matched.sort((a, b) => b.score - a.score);
+            const unmatchedSorted = unmatched.sort((a, b) => b.score - a.score);
+
+            // 매칭된 관광지를 먼저 표시
+            sortedResults = [...matchedSorted, ...unmatchedSorted];
+            
+            // 선호 키워드를 ChatInput에 자동으로 설정
+            setFilterKeywords(preferredKeywords);
+            
+            // 선호 키워드로 필터링된 결과 설정
+            const filtered = [...matched, ...unmatched];
+            setFilteredResults(filtered);
+            
+            if (matched.length > 0) {
+              toast.success(`${keyword}의 관광지 ${sortedResults.length}개를 찾았습니다. (선호 키워드 ${matched.length}개 우선 표시)`);
+            } else {
+              toast.success(`${keyword}의 관광지 ${sortedResults.length}개를 찾았습니다.`);
+            }
+          } else {
+            // 선호 키워드가 없으면 점수순 정렬
+            sortedResults.sort((a, b) => b.score - a.score);
+            setFilterKeywords([]);
+            setFilteredResults([]);
+            toast.success(`${keyword}의 관광지 ${sortedResults.length}개를 찾았습니다.`);
+          }
+        } else {
+          // 점수가 높은 순서대로 정렬
+          sortedResults.sort((a, b) => b.score - a.score);
+          setFilterKeywords([]);
+          setFilteredResults([]);
+          toast.success(`${keyword}의 관광지 ${sortedResults.length}개를 찾았습니다.`);
+        }
+      } else {
+        // 로그인하지 않은 경우 점수순 정렬
+        sortedResults.sort((a, b) => b.score - a.score);
+        setFilterKeywords([]);
+        setFilteredResults([]);
+        toast.success(`${keyword}의 관광지 ${sortedResults.length}개를 찾았습니다.`);
+      }
+
       setSearchResults(sortedResults);
       setSearchedRegion(keyword); // 실제 검색된 지역명 저장
     }
@@ -1078,6 +1147,23 @@ export default function App() {
   const handleLanguageChange = (language: string) => {
     setSelectedLanguage(language);
     toast.success(`언어가 ${language}로 변경되었습니다.`);
+  };
+
+  // 관광지가 사용자의 선호 키워드와 매칭되는지 확인
+  const isAttractionPreferred = (attraction: any) => {
+    if (!currentUser || !currentUser.email) return false;
+    
+    const savedKeywords = localStorage.getItem(`tripgpt_keywords_${currentUser.email}`);
+    if (!savedKeywords) return false;
+    
+    const preferredKeywords = JSON.parse(savedKeywords);
+    if (preferredKeywords.length === 0) return false;
+    
+    return preferredKeywords.some((keyword: string) =>
+      attraction.tags.some((tag: string) => 
+        tag.includes(keyword) || keyword.includes(tag)
+      )
+    );
   };
 
   return (
@@ -1219,10 +1305,13 @@ export default function App() {
 
               {currentUser ? (
                 <>
-                  <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-full">
+                  <button 
+                    onClick={handleMyPageClick}
+                    className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
                     <User className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm">{currentUser.username}님</span>
-                  </div>
+                    <span className="text-sm text-blue-600 hover:text-blue-700">{currentUser.username}님</span>
+                  </button>
                   <Button variant="ghost" className="gap-2" onClick={handleLogout}>
                     <LogOut className="w-4 h-4" />
                     로그아웃
@@ -1254,19 +1343,27 @@ export default function App() {
         onSignupSuccess={handleSignupSuccess}
       />
 
+      {/* MyPage Dialog */}
+      <MyPageDialog
+        open={isMyPageOpen}
+        onOpenChange={setIsMyPageOpen}
+        currentUser={currentUser}
+        onUserUpdate={handleUserUpdate}
+      />
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {!currentUser ? (
-          // 로그인 전: 중앙 검색바
+        {!hasSearched ? (
+          // 검색 전: 중앙 검색바
           <SearchBar
             value={searchKeyword}
             onChange={setSearchKeyword}
             onSearch={handleSearch}
-            disabled={true}
+            disabled={false}
             centered={true}
           />
         ) : (
-          // 로그인 후: 상단 검색바 + 결과
+          // 검색 후: 상단 검색바 + 결과
           <>
             <SearchBar
               value={searchKeyword}
@@ -1304,6 +1401,8 @@ export default function App() {
                       )
                     );
                     
+                    const isPreferred = isAttractionPreferred(attraction);
+                    
                     return (
                       <div
                         key={attraction.id}
@@ -1315,6 +1414,8 @@ export default function App() {
                           score={attraction.score}
                           imageUrl={attraction.imageUrl}
                           category={attraction.category}
+                          showScore={!!currentUser}
+                          isPreferred={isPreferred}
                           onClick={() => {
                             setSelectedAttraction(attraction);
                             setIsDetailOpen(true);
@@ -1348,27 +1449,7 @@ export default function App() {
                       className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all"
                       onClick={() => {
                         setSearchKeyword(region);
-                        // 직접 검색 실행 (빈 검색어 체크 건너뛰기)
-                        if (!currentUser) {
-                          toast.error("로그인이 필요합니다.");
-                          setIsLoginOpen(true);
-                          return;
-                        }
-                        
-                        setHasSearched(true);
-                        setFilterKeywords([]);
-                        setFilteredResults([]);
-                        
-                        const results = attractionsByRegion[region] || [];
-                        if (results.length === 0) {
-                          toast.error(`"${region}"에 대한 검색 결과가 없습니다.`);
-                          setSearchResults([]);
-                        } else {
-                          const sortedResults = [...results].sort((a, b) => b.score - a.score);
-                          toast.success(`${region}의 관광지 ${sortedResults.length}개를 찾았습니다.`);
-                          setSearchResults(sortedResults);
-                          setSearchedRegion(region);
-                        }
+                        handleSearch();
                       }}
                     >
                       {region}
@@ -1385,6 +1466,9 @@ export default function App() {
         open={isDetailOpen}
         onOpenChange={setIsDetailOpen}
         attraction={selectedAttraction}
+        showScore={!!currentUser}
+        isLoggedIn={!!currentUser}
+        onLoginRequired={() => setIsLoginOpen(true)}
       />
     </div>
   );

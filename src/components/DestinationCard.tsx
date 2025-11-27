@@ -10,6 +10,8 @@ interface DestinationCardProps {
   imageUrl: string;
   category: string;
   onClick?: () => void;
+  showScore?: boolean;
+  isPreferred?: boolean; // 선호 키워드와 매칭되는지 여부
 }
 
 export function DestinationCard({
@@ -19,6 +21,8 @@ export function DestinationCard({
   imageUrl,
   category,
   onClick,
+  showScore = true,
+  isPreferred = false,
 }: DestinationCardProps) {
   const getScoreColor = (score: number) => {
     if (score >= 90) return "bg-gradient-to-r from-green-500 to-emerald-500";
@@ -28,7 +32,14 @@ export function DestinationCard({
   };
 
   return (
-    <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group border-0 shadow-md bg-white rounded-2xl" onClick={onClick}>
+    <Card 
+      className={`overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group shadow-md bg-white rounded-2xl ${
+        isPreferred 
+          ? "border-2 border-blue-500 ring-2 ring-blue-200" 
+          : "border-0"
+      }`} 
+      onClick={onClick}
+    >
       <div className="relative h-56 overflow-hidden">
         <ImageWithFallback
           src={imageUrl}
@@ -36,12 +47,22 @@ export function DestinationCard({
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-        <div className="absolute top-4 right-4">
-          <Badge className={`${getScoreColor(score)} text-white border-0 shadow-lg px-3 py-1.5`}>
-            <Star className="w-3.5 h-3.5 mr-1 fill-current" />
-            {score}
-          </Badge>
-        </div>
+        {isPreferred && (
+          <div className="absolute top-4 left-4">
+            <Badge className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 shadow-lg px-3 py-1.5">
+              <Star className="w-3.5 h-3.5 mr-1 fill-current" />
+              추천
+            </Badge>
+          </div>
+        )}
+        {showScore && (
+          <div className="absolute top-4 right-4">
+            <Badge className={`${getScoreColor(score)} text-white border-0 shadow-lg px-3 py-1.5`}>
+              <Star className="w-3.5 h-3.5 mr-1 fill-current" />
+              {score}
+            </Badge>
+          </div>
+        )}
       </div>
       <div className="p-5">
         <div className="mb-3">
