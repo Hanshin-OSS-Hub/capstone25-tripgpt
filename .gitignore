@@ -14,6 +14,8 @@ frontend/.env
 /backend/db.sqlite3
 backend/.env
 
+# backend/migrations/
+.venv
 # ================================
 # OS / Editor
 # ================================

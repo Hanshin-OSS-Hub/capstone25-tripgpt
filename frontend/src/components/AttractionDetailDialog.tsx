@@ -237,8 +237,12 @@ export function AttractionDetailDialog({
 
                 {/* ✅ 실제 카카오 지도 */}
                 <div className="relative">
-                  <KakaoMap address={attraction.location} height={300} />
-
+                  {/* ✅ name 함께 전달 */}
+                  <KakaoMap
+                    address={attraction.location}   // 여기는 시/구 수준이어도 괜찮고
+                   name={attraction.name}          // "북촌 한옥마을"
+                    height={300}
+                  />
                   {/* 지도 위 오버레이 카드 */}
                   <div className="absolute left-4 bottom-4 bg-white/90 backdrop-blur rounded-xl shadow-md px-4 py-3">
                     <p className="text-sm font-semibold text-gray-900">

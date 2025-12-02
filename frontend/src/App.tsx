@@ -85,7 +85,7 @@ const attractionsByRegion: { [key: string]: any[] } = {
     },
     {
       id: 104,
-      name: "이태원",
+      name: "이태원역",
       location: "서울특별시 용산구",
       score: 87,
       imageUrl: itaewonImage,
