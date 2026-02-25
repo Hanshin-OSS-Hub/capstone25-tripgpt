@@ -1,4 +1,4 @@
-# backend/api/urls.py
+# backend/web/urls.py
 
 from django.urls import path
 from .views import TravelAPIView   # 방금 만든 뷰 import
