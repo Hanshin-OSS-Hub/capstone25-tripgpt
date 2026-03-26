@@ -20,6 +20,25 @@ import {
 import myeongdongImage from "./assets/0770d9d3ce5a6ffbfdb1fb147a646aec241ad03e.png";
 import seoullandImage from "./assets/9e963221c3f1733a027a15bc5330b412361c056e.png";
 import itaewonImage from "./assets/317ecf22f4837f9b82c5c22fbf3f2d1c8e4fd081.png";
+interface RecommendationResponse {
+  region: string;
+  weather_score: number;
+  distance_score: number;
+  keyword_score: number;
+  final_score: number;
+  has_alert: boolean;
+  alerts: string[];
+  details?: {
+    sky_condition?: string;
+    rain_probability?: number;
+    pm10_level?: string;
+    pm25_level?: string;
+    travel_minutes?: number;
+    selected_keywords?: string[];
+    destination_keywords?: string[];
+    message?: string;
+  };
+}
 
 // 지역별 세부 관광지 데이터
 const attractionsByRegion: { [key: string]: any[] } = {
@@ -1048,6 +1067,44 @@ export default function App() {
   const [selectedAttraction, setSelectedAttraction] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("한국어");
+  const [recommendation, setRecommendation] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const handleRecommendationSearch = async (region: string) => {
+  if (!region.trim()) {
+    toast.error("지역명을 입력해주세요.");
+    return;
+  }
+
+  try {
+    setIsSearching(true);
+
+    const response = await fetch(
+      `http://127.0.0.1:8000/places/recommendations/?region=${encodeURIComponent(region)}`
+    );
+
+    if (!response.ok) {
+      throw new Error("추천 API 호출 실패");
+    }
+
+    const data: RecommendationResponse = await response.json();
+
+    setRecommendation(data);
+
+    if (data.has_alert) {
+      toast.warning(`${data.region} 지역에 기상 특보가 있습니다.`);
+    } else {
+      toast.success(`${data.region} 추천 점수를 불러왔습니다.`);
+    }
+
+    console.log("추천 결과:", data);
+  } catch (error) {
+    console.error(error);
+    toast.error("추천 점수를 불러오지 못했습니다.");
+  } finally {
+    setIsSearching(false);
+  }
+};
 
   // 페이지 로드 시 로그인 상태 확인
   useEffect(() => {
@@ -1083,7 +1140,7 @@ export default function App() {
     setIsMyPageOpen(true);
   };
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!searchKeyword.trim()) {
       toast.error("검색어를 입력해주세요.");
       return;
@@ -1093,6 +1150,7 @@ export default function App() {
 
     // 검색어와 일치하는 지역의 관광지 찾기
     const keyword = searchKeyword.trim();
+    await handleRecommendationSearch(keyword);
     const results = attractionsByRegion[keyword] || [];
 
     if (results.length === 0) {
@@ -1485,6 +1543,32 @@ export default function App() {
               onChange={setSearchKeyword}
               onSearch={handleSearch}
             />
+
+            {recommendation && (
+  <div className="max-w-2xl mx-auto mt-6 p-5 bg-white rounded-2xl shadow border border-gray-100">
+    <h3 className="text-xl font-bold mb-3">
+      {recommendation.region} 추천 결과
+    </h3>
+
+    {recommendation.has_alert ? (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+        <p className="font-semibold mb-2">기상 특보가 있습니다.</p>
+        <p>{recommendation.alerts.join(", ")}</p>
+        <p className="mt-2 text-sm">
+          {recommendation.details?.message}
+        </p>
+      </div>
+    ) : (
+      <div className="space-y-2 text-gray-700">
+        <p>최종 점수: <span className="font-semibold">{recommendation.final_score}</span></p>
+        <p>날씨 점수: {recommendation.weather_score}</p>
+        <p>거리 점수: {recommendation.distance_score}</p>
+        <p>키워드 점수: {recommendation.keyword_score}</p>
+      </div>
+    )}
+  </div>
+)}
+
 
             {hasSearched && searchResults.length > 0 ? (
               <>
