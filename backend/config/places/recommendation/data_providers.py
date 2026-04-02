@@ -2,7 +2,7 @@
 
 from typing import Dict, List
 
-from .models import TourismPlace
+from ..models import TourismPlace
 
 
 def get_weather_data(region: str) -> Dict:

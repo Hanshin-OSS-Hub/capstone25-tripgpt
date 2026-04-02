@@ -3,7 +3,7 @@
 from django.http import JsonResponse
 from django.views import View
 
-from .recommendation import calculate_recommendation_score
+from .recommendation.service import calculate_recommendation_score
 
 
 class RecommendationAPIView(View):
