@@ -5,10 +5,31 @@ import requests
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from places.category_map import get_place_category
 from places.models import TourismPlace
 
 
 TOUR_API_URL = "http://apis.data.go.kr/B551011/KorService2/areaBasedList2"
+DEFAULT_AREA_CODES = ["1"]
+ALL_AREA_CODES = [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "31",
+    "32",
+    "33",
+    "34",
+    "35",
+    "36",
+    "37",
+    "38",
+    "39",
+]
 
 
 def as_string(value):
@@ -27,7 +48,26 @@ def as_decimal(value):
         return None
 
 
+def build_region_category_key(item):
+    area_code = as_string(item.get("areacode")) or "all"
+    sigungu_code = as_string(item.get("sigungucode")) or "all"
+    category_code = (
+        as_string(item.get("cat3"))
+        or as_string(item.get("cat2"))
+        or as_string(item.get("cat1"))
+        or as_string(item.get("contenttypeid"))
+        or "uncategorized"
+    )
+    return f"{area_code}:{sigungu_code}:{category_code}"
+
+
 def build_place_defaults(item):
+    category = get_place_category(item.get("contenttypeid"))
+    latitude = as_decimal(item.get("mapy"))
+    longitude = as_decimal(item.get("mapx"))
+    image_url = as_string(item.get("firstimage"))
+    thumbnail_url = as_string(item.get("firstimage2"))
+
     return {
         "content_type_id": int(item.get("contenttypeid") or 0),
         "title": as_string(item.get("title")),
@@ -38,13 +78,20 @@ def build_place_defaults(item):
         "homepage": as_string(item.get("homepage")),
         "area_code": as_string(item.get("areacode")),
         "sigungu_code": as_string(item.get("sigungucode")),
+        "category_key": category["category_key"],
+        "category_label": category["category_label"],
         "cat1": as_string(item.get("cat1")),
         "cat2": as_string(item.get("cat2")),
         "cat3": as_string(item.get("cat3")),
-        "mapx": as_decimal(item.get("mapx")),
-        "mapy": as_decimal(item.get("mapy")),
-        "first_image": as_string(item.get("firstimage")),
-        "first_image2": as_string(item.get("firstimage2")),
+        "latitude": latitude,
+        "longitude": longitude,
+        "mapx": longitude,
+        "mapy": latitude,
+        "image_url": image_url,
+        "thumbnail_url": thumbnail_url,
+        "first_image": image_url,
+        "first_image2": thumbnail_url,
+        "region_category_key": build_region_category_key(item),
         "overview": as_string(item.get("overview")),
         "source_modified_time": as_string(item.get("modifiedtime")),
         "raw_data": item,
@@ -63,6 +110,12 @@ class Command(BaseCommand):
         parser.add_argument("--rows", dest="rows", type=int, default=100)
         parser.add_argument("--pages", dest="pages", type=int, default=1)
         parser.add_argument("--start-page", dest="start_page", type=int, default=1)
+        parser.add_argument("--per-group-limit", dest="per_group_limit", type=int, default=0)
+        parser.add_argument(
+            "--all-areas",
+            action="store_true",
+            help="Import all area codes instead of the default Seoul-only import.",
+        )
 
     def handle(self, *args, **options):
         service_key = options["service_key"] or os.getenv("TOUR_API_SERVICE_KEY")
@@ -75,6 +128,9 @@ class Command(BaseCommand):
         area_code = options.get("area_code")
         sigungu_code = options.get("sigungu_code")
         content_type_id = options.get("content_type_id")
+        per_group_limit = options["per_group_limit"]
+        all_areas = options["all_areas"]
+        area_codes = self.resolve_area_codes(area_code=area_code, all_areas=all_areas)
 
         total_created = 0
         total_updated = 0
@@ -82,37 +138,55 @@ class Command(BaseCommand):
 
         session = requests.Session()
 
-        for page_no in range(start_page, start_page + pages):
-            items = self.fetch_page(
-                session=session,
-                service_key=service_key,
-                page_no=page_no,
-                rows=rows,
-                area_code=area_code,
-                sigungu_code=sigungu_code,
-                content_type_id=content_type_id,
-            )
+        for current_area_code in area_codes:
+            self.stdout.write(self.style.NOTICE(f"Importing area_code={current_area_code}"))
 
-            if not items:
-                self.stdout.write(self.style.WARNING(f"Page {page_no}: no items"))
-                continue
-
-            created, updated, skipped = self.save_items(items)
-            total_created += created
-            total_updated += updated
-            total_skipped += skipped
-
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"Page {page_no}: created={created}, updated={updated}, skipped={skipped}"
+            for page_no in range(start_page, start_page + pages):
+                items = self.fetch_page(
+                    session=session,
+                    service_key=service_key,
+                    page_no=page_no,
+                    rows=rows,
+                    area_code=current_area_code,
+                    sigungu_code=sigungu_code,
+                    content_type_id=content_type_id,
                 )
-            )
+
+                if not items:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"area_code={current_area_code}, page={page_no}: no items"
+                        )
+                    )
+                    continue
+
+                created, updated, skipped = self.save_items(
+                    items,
+                    per_group_limit=per_group_limit,
+                )
+                total_created += created
+                total_updated += updated
+                total_skipped += skipped
+
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"area_code={current_area_code}, page={page_no}: "
+                        f"created={created}, updated={updated}, skipped={skipped}"
+                    )
+                )
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"Done. created={total_created}, updated={total_updated}, skipped={total_skipped}"
             )
         )
+
+    def resolve_area_codes(self, *, area_code, all_areas):
+        if area_code:
+            return [str(area_code)]
+        if all_areas:
+            return ALL_AREA_CODES
+        return DEFAULT_AREA_CODES
 
     def fetch_page(
         self,
@@ -162,10 +236,11 @@ class Command(BaseCommand):
         return items
 
     @transaction.atomic
-    def save_items(self, items):
+    def save_items(self, items, per_group_limit):
         created = 0
         updated = 0
         skipped = 0
+        group_counts = {}
 
         for item in items:
             content_id_raw = item.get("contentid")
@@ -178,13 +253,24 @@ class Command(BaseCommand):
 
             content_id = int(content_id_raw)
             defaults = build_place_defaults(item)
+            region_category_key = defaults["region_category_key"]
 
-            _, is_created = TourismPlace.objects.update_or_create(
-                content_id=content_id,
-                defaults=defaults,
-            )
+            existing_place = TourismPlace.objects.filter(content_id=content_id).first()
+            if existing_place is None and per_group_limit > 0:
+                if region_category_key not in group_counts:
+                    group_counts[region_category_key] = TourismPlace.objects.filter(
+                        region_category_key=region_category_key
+                    ).count()
+
+                if group_counts[region_category_key] >= per_group_limit:
+                    skipped += 1
+                    continue
+
+            place, is_created = TourismPlace.objects.update_or_create(content_id=content_id, defaults=defaults)
             if is_created:
                 created += 1
+                if per_group_limit > 0:
+                    group_counts[region_category_key] = group_counts.get(region_category_key, 0) + 1
             else:
                 updated += 1
 

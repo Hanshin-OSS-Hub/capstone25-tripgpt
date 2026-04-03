@@ -12,13 +12,20 @@ class TourismPlace(models.Model):
     homepage = models.TextField(blank=True)
     area_code = models.CharField(max_length=20, blank=True)
     sigungu_code = models.CharField(max_length=20, blank=True)
+    category_key = models.CharField(max_length=50, blank=True)
+    category_label = models.CharField(max_length=100, blank=True)
     cat1 = models.CharField(max_length=20, blank=True)
     cat2 = models.CharField(max_length=20, blank=True)
     cat3 = models.CharField(max_length=20, blank=True)
+    latitude = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
     mapx = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
     mapy = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
+    image_url = models.URLField(max_length=500, blank=True)
+    thumbnail_url = models.URLField(max_length=500, blank=True)
     first_image = models.URLField(max_length=500, blank=True)
     first_image2 = models.URLField(max_length=500, blank=True)
+    region_category_key = models.CharField(max_length=120, blank=True)
     overview = models.TextField(blank=True)
     source_modified_time = models.CharField(max_length=30, blank=True)
     raw_data = models.JSONField(default=dict, blank=True)
@@ -29,8 +36,12 @@ class TourismPlace(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["content_type_id"]),
+            models.Index(fields=["category_key"]),
             models.Index(fields=["area_code", "sigungu_code"]),
             models.Index(fields=["cat1", "cat2", "cat3"]),
+            models.Index(fields=["region_category_key"]),
+            models.Index(fields=["latitude", "longitude"]),
+            models.Index(fields=["mapx", "mapy"]),
         ]
 
     def __str__(self):

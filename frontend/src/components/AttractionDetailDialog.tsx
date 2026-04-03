@@ -39,6 +39,8 @@ interface Attraction {
   imageUrl: string;
   category: string;
   nearbyActivities?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 interface AttractionDetailDialogProps {
@@ -237,10 +239,11 @@ export function AttractionDetailDialog({
 
                 {/* ✅ 실제 카카오 지도 */}
                 <div className="relative">
-                  {/* ✅ name 함께 전달 */}
                   <KakaoMap
-                    address={attraction.location}   // 여기는 시/구 수준이어도 괜찮고
-                   name={attraction.name}          // "북촌 한옥마을"
+                    address={attraction.location}
+                    name={attraction.name}
+                    latitude={attraction.latitude}
+                    longitude={attraction.longitude}
                     height={300}
                   />
                   {/* 지도 위 오버레이 카드 */}

@@ -20,6 +20,12 @@ import {
 import myeongdongImage from "./assets/0770d9d3ce5a6ffbfdb1fb147a646aec241ad03e.png";
 import seoullandImage from "./assets/9e963221c3f1733a027a15bc5330b412361c056e.png";
 import itaewonImage from "./assets/317ecf22f4837f9b82c5c22fbf3f2d1c8e4fd081.png";
+import {
+  mapPlaceToAttraction,
+  REGION_AREA_CODES,
+  REGION_OPTIONS,
+  type PlaceApiResult,
+} from "./places";
 interface RecommendationResponse {
   region: string;
   weather_score: number;
@@ -1247,6 +1253,100 @@ export default function App() {
     }
   };
 
+  const handlePlacesSearch = async () => {
+    if (!searchKeyword.trim()) {
+      toast.error("검색어를 입력해주세요.");
+      return;
+    }
+
+    setHasSearched(true);
+
+    const keyword = searchKeyword.trim();
+    await handleRecommendationSearch(keyword);
+
+    const areaCode = REGION_AREA_CODES[keyword];
+    if (!areaCode) {
+      toast.error(`"${keyword}" 지역은 아직 지원하지 않습니다.`);
+      setSearchResults([]);
+      setFilterKeywords([]);
+      setFilteredResults([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/places/?area_code=${encodeURIComponent(areaCode)}&limit=5000`
+      );
+
+      if (!response.ok) {
+        throw new Error("places API fetch failed");
+      }
+
+      const data: { count: number; results: PlaceApiResult[] } = await response.json();
+      const results = data.results.map(mapPlaceToAttraction);
+
+      if (results.length === 0) {
+        toast.error(`"${keyword}" 지역 데이터가 아직 없습니다.`);
+        setSearchResults([]);
+        setFilterKeywords([]);
+        setFilteredResults([]);
+        return;
+      }
+
+      let sortedResults = [...results];
+      let preferredKeywords: string[] = [];
+
+      if (currentUser && currentUser.email) {
+        const savedKeywords = localStorage.getItem(
+          `tripgpt_keywords_${currentUser.email}`
+        );
+        if (savedKeywords) {
+          preferredKeywords = JSON.parse(savedKeywords);
+        }
+      }
+
+      if (preferredKeywords.length > 0) {
+        const matched = sortedResults.filter((attraction) =>
+          preferredKeywords.some((keyword: string) =>
+            attraction.tags.some(
+              (tag: string) => tag.includes(keyword) || keyword.includes(tag)
+            )
+          )
+        );
+
+        const unmatched = sortedResults.filter(
+          (attraction) =>
+            !preferredKeywords.some((keyword: string) =>
+              attraction.tags.some(
+                (tag: string) => tag.includes(keyword) || keyword.includes(tag)
+              )
+            )
+        );
+
+        sortedResults = [
+          ...matched.sort((a, b) => b.score - a.score),
+          ...unmatched.sort((a, b) => b.score - a.score),
+        ];
+        setFilterKeywords(preferredKeywords);
+        setFilteredResults([...matched, ...unmatched]);
+      } else {
+        sortedResults.sort((a, b) => b.score - a.score);
+        setFilterKeywords([]);
+        setFilteredResults([]);
+      }
+
+      setSearchResults(sortedResults);
+      setSearchedRegion(keyword);
+      toast.success(`${keyword} 지역 장소 ${sortedResults.length}개를 불러왔습니다.`);
+    } catch (error) {
+      console.error(error);
+      toast.error("장소 데이터를 불러오지 못했습니다.");
+      setSearchResults([]);
+      setFilterKeywords([]);
+      setFilteredResults([]);
+    }
+  };
+
   const handleKeywordsChange = (keywords: string[]) => {
     setFilterKeywords(keywords);
 
@@ -1531,7 +1631,7 @@ export default function App() {
           <SearchBar
             value={searchKeyword}
             onChange={setSearchKeyword}
-            onSearch={handleSearch}
+            onSearch={handlePlacesSearch}
             disabled={false}
             centered={true}
           />
@@ -1541,7 +1641,7 @@ export default function App() {
             <SearchBar
               value={searchKeyword}
               onChange={setSearchKeyword}
-              onSearch={handleSearch}
+              onSearch={handlePlacesSearch}
             />
 
             {recommendation && (
@@ -1652,7 +1752,7 @@ export default function App() {
                   원하는 지역을 입력하면 추천 관광지를 볼 수 있습니다
                 </p>
                 <div className="flex flex-wrap justify-center gap-3">
-                  {Object.keys(attractionsByRegion)
+                  {REGION_OPTIONS
                     .filter((key) => key !== "제주도")
                     .map((region) => (
                       <Button
@@ -1661,7 +1761,9 @@ export default function App() {
                         className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all"
                         onClick={() => {
                           setSearchKeyword(region);
-                          handleSearch();
+                          setTimeout(() => {
+                            handlePlacesSearch();
+                          }, 0);
                         }}
                       >
                         {region}

@@ -1,5 +1,8 @@
 from django.urls import path
 
+from places.views import TourismPlaceListAPIView
+
+
 urlpatterns = [
-    # Place API endpoints can be added here.
+    path("", TourismPlaceListAPIView.as_view(), name="place-list"),
 ]
