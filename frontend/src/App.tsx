@@ -1569,8 +1569,53 @@ export default function App() {
   </div>
 )}
 
+            {isSearching ? (
+  <>
+    <div className="mb-6 text-center">
+      <div className="flex items-center justify-center gap-2 mb-2">
+        <span className="text-2xl">✈️</span>
+        <div className="flex gap-1">
+          <span className="text-blue-400 animate-pulse">•</span>
+          <span className="text-blue-400 animate-pulse [animation-delay:200ms]">•</span>
+          <span className="text-blue-400 animate-pulse [animation-delay:400ms]">•</span>
+        </div>
+      </div>
+      <p className="text-blue-600 font-semibold">
+        {searchKeyword || "지역"}의 추천 관광지를 찾는 중입니다...
+      </p>
+    </div>
 
-            {hasSearched && searchResults.length > 0 ? (
+    <div className="mb-8 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="h-7 w-52 rounded-md bg-slate-300 animate-pulse mb-3" />
+      <div className="h-4 w-36 rounded-md bg-slate-200 animate-pulse" />
+    </div>
+
+    <div className="mb-8 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="h-5 w-40 rounded-md bg-slate-300 animate-pulse mb-4" />
+      <div className="flex flex-wrap gap-3">
+        <div className="h-10 w-24 rounded-full bg-slate-200 animate-pulse" />
+        <div className="h-10 w-24 rounded-full bg-slate-200 animate-pulse" />
+        <div className="h-10 w-24 rounded-full bg-slate-200 animate-pulse" />
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {[1, 2, 3].map((item) => (
+        <div
+          key={item}
+          className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
+        >
+          <div className="h-56 w-full bg-slate-300 animate-pulse" />
+          <div className="p-5">
+            <div className="h-6 w-32 rounded-md bg-slate-300 animate-pulse mb-3" />
+            <div className="h-4 w-40 rounded-md bg-slate-200 animate-pulse mb-4" />
+            <div className="h-7 w-20 rounded-full bg-slate-200 animate-pulse" />
+          </div>
+        </div>
+      ))}
+    </div>
+  </>
+) : hasSearched && searchResults.length > 0 ? (
               <>
                 <div className="mb-8 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                   <h2 className="mb-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
@@ -1636,7 +1681,7 @@ export default function App() {
                   })}
                 </div>
               </>
-            ) : hasSearched && searchResults.length === 0 ? (
+            ) : hasSearched && !isSearching && searchResults.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
                 <div className="mb-4 text-4xl">🔍</div>
                 <h3 className="mb-2">검색 결과가 없습니다</h3>

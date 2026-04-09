@@ -20,6 +20,7 @@ import {
   Footprints,
   X,
   MapPinned,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
@@ -50,7 +51,8 @@ interface AttractionDetailDialogProps {
   onLoginRequired?: () => void;
 }
 
-export function AttractionDetailDialog({
+export function
+ AttractionDetailDialog({
   open,
   onOpenChange,
   attraction,
@@ -84,11 +86,6 @@ export function AttractionDetailDialog({
   };
 
   const handleDirectionsClick = () => {
-    if (!isLoggedIn) {
-      toast.error("로그인이 필요합니다.");
-      onLoginRequired?.();
-      return;
-    }
     setShowDirections(true);
   };
 
@@ -165,16 +162,25 @@ export function AttractionDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0">
-        <div className="flex h-full max-h-[90vh]">
+
+     <DialogContent
+  className={`max-h-[90vh] overflow-hidden p-0 transition-all duration-300 ${
+    showDirections
+     ? "w-[1050px] max-w-[calc(100vw-2rem)]"
+    : "w-[900px] max-w-[calc(100vw-2rem)]"
+  }`}
+>
+      
+        <div className="relative min-h-[80vh] max-h-[90vh] w-full">
           {/* 왼쪽 메인 컨텐츠 */}
-          <div
-            className={`${
-              showDirections
-                ? "w-1/2 border-r"
-                : "w-full max-w-3xl mx-auto"
-            } overflow-y-auto p-6 transition-all duration-300`}
-          >
+<div
+  className={`overflow-y-auto p-6 transition-all duration-300 ${
+    showDirections
+      ? "w-full lg:w-[520px] lg:border-r"
+      : "w-full max-w-3xl mx-auto"
+  }`}
+>
+          
             <DialogHeader className="mb-6">
               <DialogTitle className="flex items-center gap-3">
                 {attraction.name}
@@ -241,7 +247,7 @@ export function AttractionDetailDialog({
                   <KakaoMap
                     address={attraction.location}   // 여기는 시/구 수준이어도 괜찮고
                    name={attraction.name}          // "북촌 한옥마을"
-                    height={300}
+                    height={260}
                   />
                   {/* 지도 위 오버레이 카드 */}
                   <div className="absolute left-4 bottom-4 bg-white/90 backdrop-blur rounded-xl shadow-md px-4 py-3">
@@ -284,208 +290,356 @@ export function AttractionDetailDialog({
 
           </div> {/* ✅ 왼쪽 패널 div 닫기 */}
           {/* 오른쪽 상세 경로 패널 */}
-          <AnimatePresence>
-            {showDirections && (
-              <motion.div
-                initial={{ x: "100%", opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: "100%", opacity: 0 }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="w-1/2 overflow-y-auto bg-gradient-to-br from-blue-50 to-white"
+          {/* 오른쪽 상세 경로 패널 */}
+<AnimatePresence>
+  {showDirections && (
+    <>
+      {/* 데스크톱용 패널 */}
+      <motion.div
+        initial={{ x: 40, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 40, opacity: 0 }}
+        transition={{ duration: 0.25 }}
+        className="hidden lg:block absolute top-0 left-[540px] w-[420px] h-full bg-white border-l shadow-xl overflow-y-auto"
+      >
+        <div className="p-6 space-y-6">
+          {/* 헤더 */}
+          <div className="flex items-center justify-between pb-4 border-b">
+            <div className="flex items-center gap-2">
+              <Route className="w-5 h-5 text-blue-600" />
+              <h3 className="text-blue-900">상세 경로</h3>
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCloseDirections}
+              className="gap-2 text-blue-700 hover:bg-blue-50"
+            >
+              ← 돌아가기
+            </Button>
+          </div>
+
+          {/* 현재 위치 입력 */}
+          <div className="space-y-3">
+            <label className="text-sm text-gray-700 flex items-center gap-2">
+              <MapPinned className="w-4 h-4 text-blue-600" />
+              현재 위치
+            </label>
+            <Input
+              type="text"
+              placeholder="예: 서울역, 강남역, 주소 입력..."
+              value={currentLocation}
+              onChange={(e) => setCurrentLocation(e.target.value)}
+              className="bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-400"
+            />
+          </div>
+
+          {/* 교통수단 선택 */}
+          <div className="space-y-3">
+            <label className="text-sm text-gray-700">교통수단</label>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant={transportMode === "car" ? "default" : "outline"}
+                onClick={() => setTransportMode("car")}
+                className={`flex flex-col items-center gap-2 h-auto py-3 ${
+                  transportMode === "car"
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
+                }`}
               >
-                <div className="p-6 space-y-6">
-                  {/* 헤더 */}
-                  <div className="flex items-center justify-between pb-4 border-b">
-                    <div className="flex items-center gap-2">
-                      <Route className="w-5 h-5 text-blue-600" />
-                      <h3 className="text-blue-900">상세 경로</h3>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCloseDirections}
-                      className="hover:bg-blue-100 rounded-full h-8 w-8 p-0"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
+                <Car className="w-5 h-5" />
+                <span className="text-xs">자동차</span>
+              </Button>
+
+              <Button
+                variant={transportMode === "transit" ? "default" : "outline"}
+                onClick={() => setTransportMode("transit")}
+                className={`flex flex-col items-center gap-2 h-auto py-3 ${
+                  transportMode === "transit"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                }`}
+              >
+                <Train className="w-5 h-5" />
+                <span className="text-xs">대중교통</span>
+              </Button>
+
+              <Button
+                variant={transportMode === "walk" ? "default" : "outline"}
+                onClick={() => setTransportMode("walk")}
+                className={`flex flex-col items-center gap-2 h-auto py-3 ${
+                  transportMode === "walk"
+                    ? "bg-orange-600 hover:bg-orange-700 text-white"
+                    : "border-gray-300 hover:border-orange-400 hover:bg-orange-50"
+                }`}
+              >
+                <Footprints className="w-5 h-5" />
+                <span className="text-xs">도보</span>
+              </Button>
+            </div>
+          </div>
+
+          <Button
+            className="w-full h-11 text-base font-semibold bg-blue-600 hover:bg-blue-700"
+            onClick={handleFetchRoute}
+            disabled={isRouteLoading}
+          >
+            {isRouteLoading ? "경로 조회 중..." : "상세 경로 조회"}
+          </Button>
+
+          {routeInfo ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              <div className={`rounded-xl p-4 border ${modeStyle.bg} ${modeStyle.border}`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`${modeStyle.bg} p-2 rounded-lg flex items-center justify-center`}>
+                    <ModeIcon className={`w-6 h-6 ${modeStyle.color}`} />
                   </div>
-
-                  {/* 현재 위치 입력 */}
-                  <div className="space-y-3">
-                    <label className="text-sm text-gray-700 flex items-center gap-2">
-                      <MapPinned className="w-4 h-4 text-blue-600" />
-                      현재 위치
-                    </label>
-                    <Input
-                      type="text"
-                      placeholder="예: 서울역, 강남역, 주소 입력..."
-                      value={currentLocation}
-                      onChange={(e) => setCurrentLocation(e.target.value)}
-                      className="bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-400"
-                    />
+                  <div>
+                    <p className="text-sm text-gray-600">예상 소요시간</p>
+                    <p className={`text-xl font-semibold ${modeStyle.color}`}>
+                      {routeInfo.duration ?? "정보 없음"}
+                    </p>
                   </div>
-
-                  {/* 교통수단 선택 */}
-                  <div className="space-y-3">
-                    <label className="text-sm text-gray-700">교통수단</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button
-                        variant={
-                          transportMode === "car" ? "default" : "outline"
-                        }
-                        onClick={() => setTransportMode("car")}
-                        className={`flex flex-col items-center gap-2 h-auto py-3 ${
-                          transportMode === "car"
-                            ? "bg-blue-600 hover:bg-blue-700 text-white"
-                            : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
-                        }`}
-                      >
-                        <Car className="w-5 h-5" />
-                        <span className="text-xs">자동차</span>
-                      </Button>
-                      <Button
-                        variant={
-                          transportMode === "transit" ? "default" : "outline"
-                        }
-                        onClick={() => setTransportMode("transit")}
-                        className={`flex flex-col items-center gap-2 h-auto py-3 ${
-                          transportMode === "transit"
-                            ? "bg-green-600 hover:bg-green-700 text-white"
-                            : "border-gray-300 hover:border-green-400 hover:bg-green-50"
-                        }`}
-                      >
-                        <Train className="w-5 h-5" />
-                        <span className="text-xs">대중교통</span>
-                      </Button>
-                      <Button
-                        variant={
-                          transportMode === "walk" ? "default" : "outline"
-                        }
-                        onClick={() => setTransportMode("walk")}
-                        className={`flex flex-col items-center gap-2 h-auto py-3 ${
-                          transportMode === "walk"
-                            ? "bg-orange-600 hover:bg-orange-700 text-white"
-                            : "border-gray-300 hover:border-orange-400 hover:bg-orange-50"
-                        }`}
-                      >
-                        <Footprints className="w-5 h-5" />
-                        <span className="text-xs">도보</span>
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* 상세 경로 조회 버튼 */}
-                  <Button
-                    className="w-full h-11 text-base font-semibold bg-blue-600 hover:bg-blue-700"
-                    onClick={handleFetchRoute}
-                    disabled={isRouteLoading}
-                  >
-                    {isRouteLoading ? "경로 조회 중..." : "상세 경로 조회"}
-                  </Button>
-
-                  {/* 경로 정보 존재할 때 */}
-                  {routeInfo ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="space-y-4"
-                    >
-                      {/* 요약 정보 */}
-                      <div
-                        className={`rounded-xl p-4 border ${modeStyle.bg} ${modeStyle.border}`}
-                      >
-                        <div className="flex items-center gap-3 mb-3">
-                          <div
-                            className={`${modeStyle.bg} p-2 rounded-lg flex items-center justify-center`}
-                          >
-                            <ModeIcon
-                              className={`w-6 h-6 ${modeStyle.color}`}
-                            />
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">
-                              예상 소요시간
-                            </p>
-                            <p
-                              className={`text-xl font-semibold ${modeStyle.color}`}
-                            >
-                              {routeInfo.duration ?? "정보 없음"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Navigation className="w-4 h-4" />
-                          <span>
-                            총 거리: {routeInfo.distance ?? "정보 없음"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 단계별 경로 */}
-                      <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                        <h4 className="text-sm mb-4 text-gray-700 flex items-center gap-2">
-                          <Route className="w-4 h-4 text-blue-600" />
-                          단계별 경로
-                        </h4>
-                        {routeInfo.steps.length === 0 ? (
-                          <p className="text-sm text-gray-500">
-                            단계별 경로 정보를 가져오지 못했습니다.
-                          </p>
-                        ) : (
-                          <div className="space-y-3">
-                            {routeInfo.steps.map((step, index) => (
-                              <div key={index} className="flex gap-3">
-                                <div className="flex flex-col items-center">
-                                  <div
-                                    className={`w-8 h-8 rounded-full ${modeStyle.bg} ${modeStyle.color} flex items-center justify-center text-sm flex-shrink-0`}
-                                  >
-                                    {index + 1}
-                                  </div>
-                                  {index <
-                                    routeInfo.steps.length - 1 && (
-                                    <div
-                                      className={`w-0.5 flex-1 my-1 ${modeStyle.bg} min-h-[20px]`}
-                                    />
-                                  )}
-                                </div>
-                                <div className="flex-1 pb-4">
-                                  <p className="text-sm text-gray-700 leading-relaxed">
-                                    {step}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 도착지 카드 */}
-                      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-4 text-white">
-                        <div className="flex items-center gap-2 mb-2">
-                          <MapPin className="w-5 h-5" />
-                          <span className="text-sm opacity-90">도착지</span>
-                        </div>
-                        <p className="mb-1">{attraction.name}</p>
-                        <p className="text-sm opacity-90">
-                          {attraction.location}
-                        </p>
-                      </div>
-                    </motion.div>
-                  ) : (
-                    // 아직 조회 안 했을 때 안내
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center mt-4">
-                      <MapPinned className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600">
-                        현재 위치를 입력하고
-                        <br />
-                        상단의 &apos;상세 경로 조회&apos; 버튼을 눌러 주세요.
-                      </p>
-                    </div>
-                  )}
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Navigation className="w-4 h-4" />
+                  <span>총 거리: {routeInfo.distance ?? "정보 없음"}</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                <h4 className="text-sm mb-4 text-gray-700 flex items-center gap-2">
+                  <Route className="w-4 h-4 text-blue-600" />
+                  단계별 경로
+                </h4>
+                {routeInfo.steps.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    단계별 경로 정보를 가져오지 못했습니다.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {routeInfo.steps.map((step, index) => (
+                      <div key={index} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div
+                            className={`w-8 h-8 rounded-full ${modeStyle.bg} ${modeStyle.color} flex items-center justify-center text-sm flex-shrink-0`}
+                          >
+                            {index + 1}
+                          </div>
+                          {index < routeInfo.steps.length - 1 && (
+                            <div className={`w-0.5 flex-1 my-1 ${modeStyle.bg} min-h-[20px]`} />
+                          )}
+                        </div>
+                        <div className="flex-1 pb-4">
+                          <p className="text-sm text-gray-700 leading-relaxed">{step}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-4 text-white">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin className="w-5 h-5" />
+                  <span className="text-sm opacity-90">도착지</span>
+                </div>
+                <p className="mb-1">{attraction.name}</p>
+                <p className="text-sm opacity-90">{attraction.location}</p>
+              </div>
+            </motion.div>
+          ) : (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center mt-4">
+              <MapPinned className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-600">
+                현재 위치를 입력하고
+                <br />
+                상단의 &apos;상세 경로 조회&apos; 버튼을 눌러 주세요.
+              </p>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* 모바일/좁은 화면용 패널 */}
+      <motion.div
+        initial={{ x: "100%", opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: "100%", opacity: 0 }}
+        transition={{ duration: 0.25 }}
+        className="lg:hidden absolute inset-0 z-20 bg-white overflow-y-auto"
+      >
+        <div className="p-6 space-y-6">
+          {/* 헤더 */}
+          <div className="flex items-center justify-between pb-4 border-b">
+            <div className="flex items-center gap-2">
+              <Route className="w-5 h-5 text-blue-600" />
+              <h3 className="text-blue-900">상세 경로</h3>
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCloseDirections}
+              className="gap-2 text-blue-700 hover:bg-blue-50"
+            >
+              ← 돌아가기
+            </Button>
+          </div>
+
+          {/* 현재 위치 입력 */}
+          <div className="space-y-3">
+            <label className="text-sm text-gray-700 flex items-center gap-2">
+              <MapPinned className="w-4 h-4 text-blue-600" />
+              현재 위치
+            </label>
+            <Input
+              type="text"
+              placeholder="예: 서울역, 강남역, 주소 입력..."
+              value={currentLocation}
+              onChange={(e) => setCurrentLocation(e.target.value)}
+              className="bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-400"
+            />
+          </div>
+
+          {/* 교통수단 선택 */}
+          <div className="space-y-3">
+            <label className="text-sm text-gray-700">교통수단</label>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant={transportMode === "car" ? "default" : "outline"}
+                onClick={() => setTransportMode("car")}
+                className={`flex flex-col items-center gap-2 h-auto py-3 ${
+                  transportMode === "car"
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
+                }`}
+              >
+                <Car className="w-5 h-5" />
+                <span className="text-xs">자동차</span>
+              </Button>
+
+              <Button
+                variant={transportMode === "transit" ? "default" : "outline"}
+                onClick={() => setTransportMode("transit")}
+                className={`flex flex-col items-center gap-2 h-auto py-3 ${
+                  transportMode === "transit"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                }`}
+              >
+                <Train className="w-5 h-5" />
+                <span className="text-xs">대중교통</span>
+              </Button>
+
+              <Button
+                variant={transportMode === "walk" ? "default" : "outline"}
+                onClick={() => setTransportMode("walk")}
+                className={`flex flex-col items-center gap-2 h-auto py-3 ${
+                  transportMode === "walk"
+                    ? "bg-orange-600 hover:bg-orange-700 text-white"
+                    : "border-gray-300 hover:border-orange-400 hover:bg-orange-50"
+                }`}
+              >
+                <Footprints className="w-5 h-5" />
+                <span className="text-xs">도보</span>
+              </Button>
+            </div>
+          </div>
+
+          <Button
+            className="w-full h-11 text-base font-semibold bg-blue-600 hover:bg-blue-700"
+            onClick={handleFetchRoute}
+            disabled={isRouteLoading}
+          >
+            {isRouteLoading ? "경로 조회 중..." : "상세 경로 조회"}
+          </Button>
+
+          {routeInfo ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              <div className={`rounded-xl p-4 border ${modeStyle.bg} ${modeStyle.border}`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`${modeStyle.bg} p-2 rounded-lg flex items-center justify-center`}>
+                    <ModeIcon className={`w-6 h-6 ${modeStyle.color}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">예상 소요시간</p>
+                    <p className={`text-xl font-semibold ${modeStyle.color}`}>
+                      {routeInfo.duration ?? "정보 없음"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Navigation className="w-4 h-4" />
+                  <span>총 거리: {routeInfo.distance ?? "정보 없음"}</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                <h4 className="text-sm mb-4 text-gray-700 flex items-center gap-2">
+                  <Route className="w-4 h-4 text-blue-600" />
+                  단계별 경로
+                </h4>
+                {routeInfo.steps.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    단계별 경로 정보를 가져오지 못했습니다.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {routeInfo.steps.map((step, index) => (
+                      <div key={index} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div
+                            className={`w-8 h-8 rounded-full ${modeStyle.bg} ${modeStyle.color} flex items-center justify-center text-sm flex-shrink-0`}
+                          >
+                            {index + 1}
+                          </div>
+                          {index < routeInfo.steps.length - 1 && (
+                            <div className={`w-0.5 flex-1 my-1 ${modeStyle.bg} min-h-[20px]`} />
+                          )}
+                        </div>
+                        <div className="flex-1 pb-4">
+                          <p className="text-sm text-gray-700 leading-relaxed">{step}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-4 text-white">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin className="w-5 h-5" />
+                  <span className="text-sm opacity-90">도착지</span>
+                </div>
+                <p className="mb-1">{attraction.name}</p>
+                <p className="text-sm opacity-90">{attraction.location}</p>
+              </div>
+            </motion.div>
+          ) : (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center mt-4">
+              <MapPinned className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-600">
+                현재 위치를 입력하고
+                <br />
+                상단의 &apos;상세 경로 조회&apos; 버튼을 눌러 주세요.
+              </p>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </>
+  )}
+</AnimatePresence>
         </div>
       </DialogContent>
     </Dialog>
