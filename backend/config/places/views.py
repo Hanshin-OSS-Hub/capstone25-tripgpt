@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from places.models import TourismPlace
+from places.recommendation.data_providers import REGION_AREA_CODE_MAP
 from places.recommendation.service import calculate_recommendation_score
 from places.serializers import TourismPlaceSerializer
 
@@ -12,6 +13,7 @@ class TourismPlaceListAPIView(APIView):
     def get(self, request):
         queryset = TourismPlace.objects.filter(is_active=True).order_by("title")
 
+        region = (request.GET.get("region") or "").strip()
         area_code = (request.GET.get("area_code") or "").strip()
         sigungu_code = (request.GET.get("sigungu_code") or "").strip()
         category_key = (request.GET.get("category") or "").strip()
@@ -20,6 +22,9 @@ class TourismPlaceListAPIView(APIView):
             limit = min(max(int(request.GET.get("limit", 100)), 1), 5000)
         except ValueError:
             limit = 100
+
+        if not area_code and region:
+            area_code = REGION_AREA_CODE_MAP.get(region, "")
 
         if area_code:
             queryset = queryset.filter(area_code=area_code)
