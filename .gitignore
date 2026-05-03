@@ -12,6 +12,9 @@ frontend/.env
 /backend/__pycache__/
 /backend/**/*.pyc
 /backend/db.sqlite3
+/backend/config/db.sqlite3
+/backend/config/db.sqlite3-journal
+**/__pycache__/
 backend/.env
 
 # backend/migrations/
