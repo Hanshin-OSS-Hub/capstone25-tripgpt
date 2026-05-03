@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { DestinationCard } from "./components/DestinationCard";
+  import { DestinationCard } from "./components/DestinationCard";
 import { LoginDialog } from "./components/LoginDialog";
 import { SignupDialog } from "./components/SignupDialog";
 import { MyPageDialog } from "./components/MyPageDialog";
@@ -1069,6 +1069,7 @@ export default function App() {
   const [selectedLanguage, setSelectedLanguage] = useState("한국어");
   const [recommendation, setRecommendation] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [hoveredAttractionId, setHoveredAttractionId] = useState<number | null>(null);
 
   const handleRecommendationSearch = async (region: string) => {
   if (!region.trim()) {
@@ -1544,26 +1545,56 @@ export default function App() {
               onSearch={handleSearch}
             />
 
-            {recommendation && (
-  <div className="max-w-2xl mx-auto mt-6 p-5 bg-white rounded-2xl shadow border border-gray-100">
-    <h3 className="text-xl font-bold mb-3">
-      {recommendation.region} 추천 결과
-    </h3>
+         {recommendation && (
+  <div className="mx-auto mt-6 max-w-3xl rounded-[28px] bg-white px-7 py-6 shadow-[0_10px_28px_rgba(15,23,42,0.08)] ring-1 ring-black/5">
+    <div className="mb-4 flex items-center justify-between">
+      <div>
+        <h3 className="text-2xl font-semibold tracking-tight text-gray-900">
+          {recommendation.region} 추천 결과
+        </h3>
+        <p className="mt-1 text-sm text-gray-500">
+          현재 지역 조건을 바탕으로 추천 점수를 계산했어요
+        </p>
+      </div>
+      <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
+        점수 분석
+      </div>
+    </div>
 
     {recommendation.has_alert ? (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
-        <p className="font-semibold mb-2">기상 특보가 있습니다.</p>
+      <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
+        <p className="mb-2 font-semibold">기상 특보가 있습니다.</p>
         <p>{recommendation.alerts.join(", ")}</p>
         <p className="mt-2 text-sm">
           {recommendation.details?.message}
         </p>
       </div>
     ) : (
-      <div className="space-y-2 text-gray-700">
-        <p>최종 점수: <span className="font-semibold">{recommendation.final_score}</span></p>
-        <p>날씨 점수: {recommendation.weather_score}</p>
-        <p>거리 점수: {recommendation.distance_score}</p>
-        <p>키워드 점수: {recommendation.keyword_score}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl bg-gray-50 px-5 py-4">
+          <p className="text-sm text-gray-500">최종 점수</p>
+          <p className="mt-1 text-2xl font-bold text-gray-900">
+            {recommendation.final_score}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-gray-50 px-5 py-4">
+          <p className="text-sm text-gray-500">날씨 점수</p>
+          <p className="mt-1 text-xl font-semibold text-gray-900">
+            {recommendation.weather_score}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-gray-50 px-5 py-4">
+          <p className="text-sm text-gray-500">거리 점수</p>
+          <p className="mt-1 text-xl font-semibold text-gray-900">
+            {recommendation.distance_score}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-gray-50 px-5 py-4">
+          <p className="text-sm text-gray-500">키워드 점수</p>
+          <p className="mt-1 text-xl font-semibold text-gray-900">
+            {recommendation.keyword_score}
+          </p>
+        </div>
       </div>
     )}
   </div>
@@ -1638,48 +1669,54 @@ export default function App() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {(filteredResults.length > 0
-                    ? filteredResults
-                    : searchResults
-                  ).map((attraction, index) => {
-                    const isMatched =
-                      filterKeywords.length > 0 &&
-                      filterKeywords.some((keyword) =>
-                        attraction.tags.some(
-                          (tag: string) =>
-                            tag.includes(keyword) || keyword.includes(tag)
-                        )
-                      );
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+  {(filteredResults.length > 0
+    ? filteredResults
+    : searchResults
+  ).map((attraction, index) => {
+    const isMatched =
+      filterKeywords.length > 0 &&
+      filterKeywords.some((keyword) =>
+        attraction.tags.some(
+          (tag: string) =>
+            tag.includes(keyword) || keyword.includes(tag)
+        )
+      );
 
-                    const isPreferred = isAttractionPreferred(attraction);
+    const isPreferred = isAttractionPreferred(attraction);
+    const isHovered = hoveredAttractionId === attraction.id;
+    const isDimmed = hoveredAttractionId !== null && hoveredAttractionId !== attraction.id;
 
-                    return (
-                      <div
-                        key={attraction.id}
-                        className={
-                          isMatched
-                            ? "ring-2 ring-blue-500 rounded-2xl shadow-lg shadow-blue-100"
-                            : ""
-                        }
-                      >
-                        <DestinationCard
-                          name={attraction.name}
-                          location={attraction.location}
-                          score={attraction.score}
-                          imageUrl={attraction.imageUrl}
-                          category={attraction.category}
-                          showScore={!!currentUser}
-                          isPreferred={isPreferred}
-                          onClick={() => {
-                            setSelectedAttraction(attraction);
-                            setIsDetailOpen(true);
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+    return (
+      <div
+        key={attraction.id}
+        className={
+          isMatched
+            ? "ring-2 ring-blue-500 rounded-2xl shadow-lg shadow-blue-100"
+            : ""
+        }
+      >
+        <DestinationCard
+  name={attraction.name}
+  location={attraction.location}
+  score={attraction.score}
+  imageUrl={attraction.imageUrl}
+  category={attraction.category}
+  showScore={!!currentUser}
+  isPreferred={isPreferred}
+  isHovered={isHovered}
+  isDimmed={isDimmed}
+  onMouseEnter={() => setHoveredAttractionId(attraction.id)}
+  onMouseLeave={() => setHoveredAttractionId(null)}
+  onClick={() => {
+    setSelectedAttraction(attraction);
+    setIsDetailOpen(true);
+  }}
+/>
+      </div>
+    );
+  })}
+</div>
               </>
             ) : hasSearched && !isSearching && searchResults.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
