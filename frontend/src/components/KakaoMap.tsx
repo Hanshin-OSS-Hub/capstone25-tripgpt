@@ -6,8 +6,6 @@ interface KakaoMapProps {
   address: string;
   /** 장소명 (선택사항, 주소만으로 검색되지 않을 때 사용) */
   name?: string;
-  latitude?: number | null;
-  longitude?: number | null;
   /** 지도 높이(px) – 기본값 260 */
   height?: number;
 }
@@ -23,13 +21,7 @@ const isTooGenericAddress = (addr: string | undefined | null) => {
   return trimmed.length <= 8 || /구$/.test(trimmed);
 };
 
-export function KakaoMap({
-  address,
-  name,
-  latitude,
-  longitude,
-  height = 260,
-}: KakaoMapProps) {
+export function KakaoMap({ address, name, height = 260 }: KakaoMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [resolvedAddress, setResolvedAddress] = useState<string>("");
 
@@ -67,22 +59,6 @@ export function KakaoMap({
       const map = new kakao.maps.Map(container, options);
       const geocoder = new kakao.maps.services.Geocoder();
       const places = new kakao.maps.services.Places();
-
-      if (latitude != null && longitude != null) {
-        const coord = new kakao.maps.LatLng(latitude, longitude);
-        map.setCenter(coord);
-        const marker = new kakao.maps.Marker({ map, position: coord });
-        const info = new kakao.maps.InfoWindow({
-          content: `
-            <div style="padding:6px 10px;font-size:12px;">
-              ${name || address}
-            </div>
-          `,
-        });
-        info.open(map, marker);
-        setResolvedAddress(address || name || "");
-        return;
-      }
 
       // 🔹 검색 전략 구성
       const strategies: string[] = [];
@@ -239,7 +215,7 @@ export function KakaoMap({
       // 검색 시작
       tryPlaceSearch(0);
     });
-  }, [address, name, latitude, longitude]);
+  }, [address, name]);
 
   return (
     <div

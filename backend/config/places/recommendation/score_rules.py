@@ -1,15 +1,7 @@
-# places/score_rules.py
-
 from typing import List
 
 
 def score_sky_condition(condition: str) -> int:
-    """
-    하늘 상태 점수
-    맑음: 2점
-    흐림: 1점
-    비/천둥/우박/눈 등: 0점
-    """
     if not condition:
         return 0
 
@@ -25,12 +17,6 @@ def score_sky_condition(condition: str) -> int:
 
 
 def score_rain_probability(rain_prob: int) -> int:
-    """
-    강우확률 점수
-    0~40%: 2점
-    41~70%: 1점
-    71% 이상: 0점
-    """
     if rain_prob <= 40:
         return 2
     if rain_prob <= 70:
@@ -39,12 +25,6 @@ def score_rain_probability(rain_prob: int) -> int:
 
 
 def score_air_quality(level: str) -> int:
-    """
-    미세먼지 / 초미세먼지 공통 점수
-    매우좋음, 좋음: 2점
-    보통: 1점
-    나쁨, 매우나쁨: 0점
-    """
     if not level:
         return 0
 
@@ -65,10 +45,6 @@ def score_weather_total(
     pm10_level: str,
     pm25_level: str,
 ) -> int:
-    """
-    날씨 총점: 최대 8점
-    (하늘상태 2 + 강우확률 2 + 미세먼지 2 + 초미세먼지 2)
-    """
     total = 0
     total += score_sky_condition(sky_condition)
     total += score_rain_probability(rain_probability)
@@ -78,19 +54,10 @@ def score_weather_total(
 
 
 def has_weather_alert(alerts: List[str]) -> bool:
-    """
-    특보가 하나라도 있으면 True
-    """
     return len(alerts) > 0
 
 
 def score_travel_time(minutes: int) -> int:
-    """
-    이동 시간 점수
-    0~30분: 10점
-    31~90분: 5점
-    91분 이상: 0점
-    """
     if minutes <= 30:
         return 10
     if minutes <= 90:
@@ -100,17 +67,32 @@ def score_travel_time(minutes: int) -> int:
 
 def score_keywords(selected_keywords: List[str], destination_keywords: List[str]) -> int:
     """
-    키워드 점수
-    일치하는 키워드 1개당 2점
-    최대 10점
+    - exact match만 보지 않고 부분 포함 일치까지 허용
+    - 일치 키워드 1개마다 기본 점수 가산
+    - 2개 이상 중첩되면 추가 보너스 가산
     """
     if not selected_keywords or not destination_keywords:
         return 0
 
-    matched_count = 0
+    normalized_destination_keywords = [
+        destination_keyword.strip().lower()
+        for destination_keyword in destination_keywords
+        if destination_keyword
+    ]
+    matched_keywords = []
 
     for keyword in selected_keywords:
-        if keyword in destination_keywords:
-            matched_count += 1
+        normalized_keyword = keyword.strip().lower()
+        if not normalized_keyword:
+            continue
 
-    return min(matched_count * 2, 10)
+        if any(
+            normalized_keyword in destination_keyword
+            or destination_keyword in normalized_keyword
+            for destination_keyword in normalized_destination_keywords
+        ):
+            matched_keywords.append(normalized_keyword)
+
+    matched_count = len(matched_keywords)
+    score = matched_count * 3 + max(matched_count - 1, 0) * 2
+    return min(score, 15)
