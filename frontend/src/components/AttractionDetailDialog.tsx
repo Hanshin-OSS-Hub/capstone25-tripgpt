@@ -233,7 +233,7 @@ export function AttractionDetailDialog({
     boxShadow: "0 6px 14px rgba(15, 23, 42, 0.04)",
   };
 
-  const RoutePanelBody = () => (
+  const renderRoutePanelBody = () => (
     <div className="space-y-6 p-6">
       <div className="sticky top-0 z-20 -mx-1 px-1 pb-4">
         <div
@@ -501,7 +501,7 @@ export function AttractionDetailDialog({
     </div>
   );
 
-  const NearbyInfoPanel = () => (
+  const renderNearbyInfoPanel = () => (
     <div className="space-y-5 p-6">
       <div className="sticky top-0 z-20 -mx-1 px-1 pb-4">
         <div
@@ -991,7 +991,7 @@ export function AttractionDetailDialog({
                     boxSizing: "border-box",
                   }}
                 >
-                  <RoutePanelBody />
+                  {renderRoutePanelBody()}
                 </div>
               </motion.div>
             )}
@@ -1022,7 +1022,7 @@ export function AttractionDetailDialog({
                     boxSizing: "border-box",
                   }}
                 >
-                  <NearbyInfoPanel />
+                  {renderNearbyInfoPanel()}
                 </div>
               </motion.div>
             )}

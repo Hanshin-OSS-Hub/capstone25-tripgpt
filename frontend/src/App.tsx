@@ -106,6 +106,34 @@ const DETAIL_TAG_RULES: Record<string, string[]> = {
   역사: ["궁", "궁궐", "문화재", "사찰", "박물관", "유적", "전통", "역사"],
 };
 
+const SPORTS_TAG_ALIASES: Record<string, string[]> = {
+  "야구장": [
+    "야구장",
+    "스카이돔",
+    "랜더스필드",
+    "라이온즈파크",
+    "챔피언스필드",
+    "위즈파크",
+    "볼파크",
+    "NC파크",
+  ],
+  "축구장": [
+    "축구장",
+    "월드컵경기장",
+    "축구전용구장",
+    "스틸야드",
+    "축구센터",
+    "스타디움",
+  ],
+  "배구장": [
+    "배구",
+    "체육관",
+    "실내체육관",
+    "아레나",
+    "페퍼스타디움",
+  ],
+};
+
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
@@ -137,6 +165,12 @@ function inferTags(place: PlaceApiResult) {
   if (place.category_label) {
     tags.push(place.category_label);
   }
+
+  Object.entries(SPORTS_TAG_ALIASES).forEach(([tag, aliases]) => {
+    if (aliases.some((alias) => sourceText.includes(alias))) {
+      tags.push("스포츠", tag);
+    }
+  });
 
   return unique(tags);
 }
@@ -269,7 +303,8 @@ export default function App() {
   }, []);
 
   const displayedResults = useMemo(() => {
-    return filteredResults.length > 0 ? filteredResults : searchResults;
+    const results = filteredResults.length > 0 ? filteredResults : searchResults;
+    return results.slice(0, 40);
   }, [filteredResults, searchResults]);
 
   const handleLoginSuccess = (user: StoredUser) => {
