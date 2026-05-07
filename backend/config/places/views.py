@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from places.models import TourismPlace
-from places.recommendation.data_providers import REGION_AREA_CODE_MAP
+from places.recommendation.data_providers import REGION_AREA_CODE_MAP, normalize_region_name
 from places.recommendation.service import calculate_recommendation_score
 from places.serializers import TourismPlaceSerializer
 
@@ -13,7 +13,7 @@ class TourismPlaceListAPIView(APIView):
     def get(self, request):
         queryset = TourismPlace.objects.filter(is_active=True).order_by("title")
 
-        region = (request.GET.get("region") or "").strip()
+        region = normalize_region_name((request.GET.get("region") or "").strip())
         area_code = (request.GET.get("area_code") or "").strip()
         sigungu_code = (request.GET.get("sigungu_code") or "").strip()
         category_key = (request.GET.get("category") or "").strip()
@@ -46,7 +46,7 @@ class TourismPlaceListAPIView(APIView):
 
 class RecommendationAPIView(View):
     def get(self, request):
-        region = (request.GET.get("region") or "").strip()
+        region = normalize_region_name((request.GET.get("region") or "").strip())
         origin = (request.GET.get("origin") or "서울역").strip()
         transport_type = (request.GET.get("transport_type") or "transit").strip()
 

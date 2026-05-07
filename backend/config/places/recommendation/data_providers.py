@@ -29,6 +29,29 @@ REGION_QUERY_MAP = {
     "제주": "Jeju City,KR",
     "경주": "Gyeongju,KR",
 }
+REGION_ALIASES = {
+    "서울특별시": "서울",
+    "서울시": "서울",
+    "부산광역시": "부산",
+    "대구광역시": "대구",
+    "인천광역시": "인천",
+    "광주광역시": "광주",
+    "대전광역시": "대전",
+    "울산광역시": "울산",
+    "세종특별자치시": "세종",
+    "경기도": "경기",
+    "강원도": "강원",
+    "강원특별자치도": "강원",
+    "충청북도": "충북",
+    "충청남도": "충남",
+    "전라북도": "전북",
+    "전북특별자치도": "전북",
+    "전라남도": "전남",
+    "경상북도": "경북",
+    "경상남도": "경남",
+    "제주도": "제주",
+    "제주특별자치도": "제주",
+}
 REGION_AREA_CODE_MAP = {
     "서울": "1",
     "인천": "2",
@@ -71,6 +94,33 @@ WEATHER_DEFAULT = {
     "alerts": [],
 }
 TRAVEL_TIME_DEFAULT_MINUTES = 120
+SPORTS_FACILITY_ALIASES = {
+    "야구장": [
+        "야구장",
+        "스카이돔",
+        "랜더스필드",
+        "라이온즈파크",
+        "챔피언스필드",
+        "위즈파크",
+        "볼파크",
+        "NC파크",
+    ],
+    "축구장": [
+        "축구장",
+        "월드컵경기장",
+        "축구전용구장",
+        "스틸야드",
+        "축구센터",
+        "스타디움",
+    ],
+    "배구장": [
+        "배구",
+        "체육관",
+        "실내체육관",
+        "아레나",
+        "페퍼스타디움",
+    ],
+}
 
 
 def map_weather_description_to_score_label(description: str) -> str:
@@ -102,7 +152,13 @@ def map_air_quality_level(value: float | int | None) -> str:
 
 
 def get_region_query(region: str) -> str:
-    return REGION_QUERY_MAP.get((region or "").strip(), f"{(region or '').strip()},KR")
+    normalized_region = normalize_region_name(region)
+    return REGION_QUERY_MAP.get(normalized_region, f"{normalized_region},KR")
+
+
+def normalize_region_name(region: str) -> str:
+    value = (region or "").strip()
+    return REGION_ALIASES.get(value, value)
 
 
 def get_region_coordinates(region: str, api_key: str):
@@ -337,7 +393,7 @@ def get_destination_keywords(region: str) -> List[str]:
     """
     저장된 TourismPlace 데이터를 기준으로 지역 대표 키워드를 추출합니다.
     """
-    area_code = REGION_AREA_CODE_MAP.get((region or "").strip())
+    area_code = REGION_AREA_CODE_MAP.get(normalize_region_name(region))
     if not area_code:
         return []
 
@@ -369,6 +425,11 @@ def get_destination_keywords(region: str) -> List[str]:
                 keyword_counts[group] = keyword_counts.get(group, 0) + 1
                 for token in matched:
                     keyword_counts[token] = keyword_counts.get(token, 0) + 1
+
+        for facility_tag, aliases in SPORTS_FACILITY_ALIASES.items():
+            if any(alias in text for alias in aliases):
+                keyword_counts["스포츠"] = keyword_counts.get("스포츠", 0) + 1
+                keyword_counts[facility_tag] = keyword_counts.get(facility_tag, 0) + 1
 
     ranked_keywords = sorted(
         keyword_counts.items(),

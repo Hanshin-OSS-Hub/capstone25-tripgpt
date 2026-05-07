@@ -1,17 +1,15 @@
-# places/recommendation.py
-
 from typing import Dict, List
 
 from .data_providers import (
-    get_weather_data,
-    get_travel_time_data,
     get_destination_keywords,
+    get_travel_time_data,
+    get_weather_data,
 )
 from .score_rules import (
-    score_weather_total,
     has_weather_alert,
-    score_travel_time,
     score_keywords,
+    score_travel_time,
+    score_weather_total,
 )
 
 
@@ -21,27 +19,10 @@ def calculate_recommendation_score(
     origin: str = "서울역",
     transport_type: str = "transit",
 ) -> Dict:
-    """
-    지역별 추천 점수 계산
-
-    반환 예시:
-    {
-        "region": "서울",
-        "weather_score": 7,
-        "distance_score": 10,
-        "keyword_score": 4,
-        "final_score": 21,
-        "has_alert": False,
-        "alerts": [],
-        "details": {...}
-    }
-    """
     selected_keywords = selected_keywords or []
 
-    # 1. 날씨 데이터 가져오기
     weather_data = get_weather_data(region)
 
-    # 2. 특보 체크
     alerts = weather_data.get("alerts", [])
     has_alert = has_weather_alert(alerts)
 
@@ -55,11 +36,10 @@ def calculate_recommendation_score(
             "has_alert": True,
             "alerts": alerts,
             "details": {
-                "message": "해당 지역에 기상 특보가 있어 추천 점수를 0점 처리했습니다."
+                "message": "해당 지역에 기상 특보가 있어 추천 점수를 0점으로 처리했습니다.",
             },
         }
 
-    # 3. 날씨 점수
     weather_score = score_weather_total(
         sky_condition=weather_data.get("sky_condition", ""),
         rain_probability=weather_data.get("rain_probability", 100),
@@ -67,16 +47,22 @@ def calculate_recommendation_score(
         pm25_level=weather_data.get("pm25_level", ""),
     )
 
-    # 4. 거리 점수
-    travel_data = get_travel_time_data(origin, region, transport_type)
-    travel_minutes = travel_data.get("minutes", 120)
+    # 거리 점수 임시 정책
+    # 현재 메인 검색 화면에서는 실제 출발지(origin)를 추천 API로 전달하지 않고 있어
+    # 사용자 기준 거리 점수가 정확하지 않습니다.
+    #
+    # 그래서 당분간은 거리 점수를 최대치로 고정합니다.
+    # 나중에 실제 거리 점수로 복구할 때는 아래 3줄을 다시 사용하면 됩니다.
+    #
+    # travel_data = get_travel_time_data(origin, region, transport_type)
+    # travel_minutes = travel_data.get("minutes", 120)
+    # distance_score = score_travel_time(travel_minutes)
+    travel_minutes = 0
     distance_score = score_travel_time(travel_minutes)
 
-    # 5. 키워드 점수
     destination_keywords = get_destination_keywords(region)
     keyword_score = score_keywords(selected_keywords, destination_keywords)
 
-    # 6. 최종 점수
     final_score = weather_score + distance_score + keyword_score
 
     return {

@@ -6,6 +6,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from places.category_map import get_place_category
+from places.curated_region_map import (
+    REGION_CATEGORY_MAP,
+    REGION_NAME_TO_AREA_CODE,
+    flatten_region_keywords,
+)
 from places.models import TourismPlace
 
 
@@ -99,6 +104,28 @@ def build_place_defaults(item):
     }
 
 
+def normalize_keyword(value):
+    return as_string(value).replace(" ", "").lower()
+
+
+def item_matches_keywords(item, keywords):
+    if not keywords:
+        return True
+
+    normalized_title = normalize_keyword(item.get("title"))
+    if not normalized_title:
+        return False
+
+    for keyword in keywords:
+        normalized_keyword = normalize_keyword(keyword)
+        if not normalized_keyword:
+            continue
+        if normalized_keyword in normalized_title or normalized_title in normalized_keyword:
+            return True
+
+    return False
+
+
 class Command(BaseCommand):
     help = "Fetch tourism places from TourAPI and upsert them into places_tourismplace."
 
@@ -111,6 +138,17 @@ class Command(BaseCommand):
         parser.add_argument("--pages", dest="pages", type=int, default=1)
         parser.add_argument("--start-page", dest="start_page", type=int, default=1)
         parser.add_argument("--per-group-limit", dest="per_group_limit", type=int, default=0)
+        parser.add_argument(
+            "--curated",
+            action="store_true",
+            help="Import only places matching the curated region/category keyword map.",
+        )
+        parser.add_argument(
+            "--curated-region",
+            dest="curated_regions",
+            action="append",
+            help="Limit curated import to one or more named regions like 서울, 부산, 제주.",
+        )
         parser.add_argument(
             "--all-areas",
             action="store_true",
@@ -130,7 +168,14 @@ class Command(BaseCommand):
         content_type_id = options.get("content_type_id")
         per_group_limit = options["per_group_limit"]
         all_areas = options["all_areas"]
-        area_codes = self.resolve_area_codes(area_code=area_code, all_areas=all_areas)
+        curated = options["curated"]
+        curated_regions = options.get("curated_regions") or []
+        area_codes, curated_keywords = self.resolve_import_scope(
+            area_code=area_code,
+            all_areas=all_areas,
+            curated=curated,
+            curated_regions=curated_regions,
+        )
 
         total_created = 0
         total_updated = 0
@@ -160,6 +205,18 @@ class Command(BaseCommand):
                     )
                     continue
 
+                if curated_keywords:
+                    items = [
+                        item for item in items if item_matches_keywords(item, curated_keywords)
+                    ]
+                    if not items:
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f"area_code={current_area_code}, page={page_no}: no curated matches"
+                            )
+                        )
+                        continue
+
                 created, updated, skipped = self.save_items(
                     items,
                     per_group_limit=per_group_limit,
@@ -187,6 +244,25 @@ class Command(BaseCommand):
         if all_areas:
             return ALL_AREA_CODES
         return DEFAULT_AREA_CODES
+
+    def resolve_import_scope(self, *, area_code, all_areas, curated, curated_regions):
+        if not curated and not curated_regions:
+            return self.resolve_area_codes(area_code=area_code, all_areas=all_areas), []
+
+        selected_regions = curated_regions or list(REGION_CATEGORY_MAP.keys())
+        unknown_regions = [region for region in selected_regions if region not in REGION_NAME_TO_AREA_CODE]
+        if unknown_regions:
+            raise CommandError(
+                f"Unknown curated region(s): {', '.join(unknown_regions)}"
+            )
+
+        area_codes = []
+        for region in selected_regions:
+            area_code_value = REGION_NAME_TO_AREA_CODE[region]
+            if area_code_value not in area_codes:
+                area_codes.append(area_code_value)
+
+        return area_codes, flatten_region_keywords(selected_regions)
 
     def fetch_page(
         self,
@@ -224,16 +300,22 @@ class Command(BaseCommand):
             )
         data = response.json()
 
-        items = (
-            data.get("response", {})
-            .get("body", {})
-            .get("items", {})
-            .get("item", [])
-        )
+        response_data = data.get("response", {})
+        body = response_data.get("body", {}) if isinstance(response_data, dict) else {}
+        items_container = body.get("items", {}) if isinstance(body, dict) else {}
+
+        if isinstance(items_container, dict):
+            items = items_container.get("item", [])
+        elif isinstance(items_container, list):
+            items = items_container
+        else:
+            return []
 
         if isinstance(items, dict):
             return [items]
-        return items
+        if isinstance(items, list):
+            return items
+        return []
 
     @transaction.atomic
     def save_items(self, items, per_group_limit):
