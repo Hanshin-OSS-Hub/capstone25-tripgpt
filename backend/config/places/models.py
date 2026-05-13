@@ -28,6 +28,7 @@ class TourismPlace(models.Model):
     region_category_key = models.CharField(max_length=120, blank=True)
     overview = models.TextField(blank=True)
     source_modified_time = models.CharField(max_length=30, blank=True)
+    keyword_tags = models.JSONField(default=list, blank=True)
     raw_data = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

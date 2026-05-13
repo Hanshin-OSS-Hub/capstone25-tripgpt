@@ -1,8 +1,11 @@
+from collections import Counter
+
 from django.http import JsonResponse
 from django.views import View
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from places.keyword_classifier import CATEGORY_KEYWORDS, classify_place
 from places.models import TourismPlace
 from places.recommendation.data_providers import REGION_AREA_CODE_MAP, normalize_region_name
 from places.recommendation.service import calculate_recommendation_score
@@ -26,6 +29,8 @@ class TourismPlaceListAPIView(APIView):
         if not area_code and region:
             area_code = REGION_AREA_CODE_MAP.get(region, "")
 
+        keyword_tag = (request.GET.get("keyword_tag") or "").strip()
+
         if area_code:
             queryset = queryset.filter(area_code=area_code)
         if sigungu_code:
@@ -34,12 +39,58 @@ class TourismPlaceListAPIView(APIView):
             queryset = queryset.filter(category_key=category_key)
         if content_type_id:
             queryset = queryset.filter(content_type_id=content_type_id)
+        if keyword_tag:
+            queryset = queryset.filter(keyword_tags__contains=keyword_tag)
 
         serializer = TourismPlaceSerializer(queryset[:limit], many=True)
         return Response(
             {
                 "count": queryset.count(),
                 "results": serializer.data,
+            }
+        )
+
+
+class KeywordClassificationAPIView(APIView):
+    """
+    GET /api/places/keyword-classification/
+    저장된 장소들을 프로젝트 키워드 카테고리별로 집계해서 반환합니다.
+
+    쿼리 파라미터:
+      - region: 지역 이름으로 필터 (선택)
+    """
+
+    def get(self, request):
+        region = normalize_region_name((request.GET.get("region") or "").strip())
+        qs = TourismPlace.objects.filter(is_active=True)
+
+        if region:
+            area_code = REGION_AREA_CODE_MAP.get(region, "")
+            if area_code:
+                qs = qs.filter(area_code=area_code)
+
+        tag_counter: Counter = Counter()
+        unclassified_ids: list[int] = []
+
+        for place in qs.only("content_id", "keyword_tags"):
+            tags = place.keyword_tags or []
+            if tags:
+                for tag in tags:
+                    tag_counter[tag] += 1
+            else:
+                unclassified_ids.append(place.content_id)
+
+        summary = {
+            category: tag_counter.get(category, 0)
+            for category in CATEGORY_KEYWORDS
+        }
+        summary["미분류"] = len(unclassified_ids)
+
+        return Response(
+            {
+                "region": region or "전체",
+                "total": qs.count(),
+                "classification": summary,
             }
         )
 

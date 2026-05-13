@@ -68,6 +68,7 @@ interface PlaceApiResult {
   image_url?: string;
   thumbnail_url?: string;
   overview?: string;
+  keyword_tags?: string[];
 }
 
 interface PlaceSearchResponse {
@@ -91,6 +92,7 @@ interface AttractionResult {
   category: string;
   region: string;
   tags: string[];
+  keywordTags: string[];
   nearbyActivities: string[];
 }
 
@@ -201,6 +203,7 @@ function mapPlaceToAttraction(
     category: place.category_label || "관광지",
     region,
     tags: inferTags(place),
+    keywordTags: place.keyword_tags ?? [],
     nearbyActivities: buildNearbyActivities(place),
   };
 }
@@ -688,6 +691,7 @@ export default function App() {
                           score={attraction.score}
                           imageUrl={attraction.imageUrl}
                           category={attraction.category}
+                          keywordTags={attraction.keywordTags}
                           showScore={!!currentUser}
                           isPreferred={isPreferred}
                           isHovered={isHovered}

@@ -25,6 +25,7 @@ class TourismPlaceSerializer(serializers.ModelSerializer):
             "category_key",
             "category_label",
             "sub_category",
+            "keyword_tags",
             "latitude",
             "longitude",
             "image_url",
