@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { LogIn, LogOut, User, Plane, Globe, Languages } from "lucide-react";
+import { LogIn, LogOut, User, Plane, Globe } from "lucide-react";
 import { toast } from "sonner";
 
 import { DestinationCard } from "./components/DestinationCard";
@@ -12,12 +12,6 @@ import { ChatInput } from "./components/ChatInput";
 import { AttractionDetailDialog } from "./components/AttractionDetailDialog";
 import { Button } from "./components/ui/button";
 import { Toaster } from "./components/ui/sonner";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./components/ui/dropdown-menu";
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:8000/api"
@@ -282,7 +276,6 @@ export default function App() {
   const [filterKeywords, setFilterKeywords] = useState<string[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("한국어");
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isSignupOpen, setIsSignupOpen] = useState(false);
   const [isMyPageOpen, setIsMyPageOpen] = useState(false);
@@ -345,10 +338,6 @@ export default function App() {
       setHasSearched(false);
   };
 
-  const handleLanguageChange = (language: string) => {
-    setSelectedLanguage(language);
-    toast.success(`언어가 ${language}로 변경되었습니다.`);
-  };
 
   const isAttractionPreferred = (attraction: AttractionResult) => {
     const preferredKeywords = getSavedPreferredKeywords(currentUser);
@@ -504,30 +493,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2 hover:bg-gray-50">
-                  <Languages className="h-4 w-4" />
-                  <span className="hidden sm:inline">{selectedLanguage}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuItem onClick={() => handleLanguageChange("한국어")}>
-                  한국어
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleLanguageChange("English")}>
-                  English
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleLanguageChange("日本語")}>
-                  日本語
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleLanguageChange("中文")}>
-                  中文
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {currentUser ? (
+{currentUser ? (
               <>
                 <button
                   onClick={handleMyPageClick}
