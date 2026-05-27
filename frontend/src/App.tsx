@@ -18,7 +18,38 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu";
-import { REGION_AREA_CODES, REGION_OPTIONS } from "./places";
+
+// ==========================================
+// 기존 places.ts 분리 대상이었던 상수 및 유틸 함수 통합
+// ==========================================
+const API_BASE = "http://127.0.0.1:8000";
+const PAGE_SIZE = 50;
+
+const REGION_OPTIONS = [
+  "서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산", "세종",
+  "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주", "경주",
+];
+
+const REGION_AREA_CODES: Record<string, string> = {
+  "서울": "1",
+  "인천": "2",
+  "대전": "3",
+  "대구": "4",
+  "광주": "5",
+  "부산": "6",
+  "울산": "7",
+  "세종": "8",
+  "경기": "31",
+  "강원": "32",
+  "충북": "33",
+  "충남": "34",
+  "전북": "35",
+  "전남": "36",
+  "경북": "37",
+  "경남": "38",
+  "제주": "39",
+  "경주": "37",
+};
 
 interface RecommendationResponse {
   region: string;
@@ -48,13 +79,6 @@ interface PlaceApiResult {
   keyword_tags?: string[];
 }
 
-interface StoredUser {
-  userId?: string;
-  username?: string;
-  email?: string;
-  preferredKeywords?: string[];
-}
-
 interface AttractionResult {
   id: number;
   name: string;
@@ -62,14 +86,10 @@ interface AttractionResult {
   score: number;
   imageUrl: string;
   category: string;
-  region: string;
   tags: string[];
   keywordTags: string[];
   nearbyActivities: string[];
 }
-
-const API_BASE = "http://127.0.0.1:8000";
-const PAGE_SIZE = 50;
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80";
@@ -84,21 +104,23 @@ const DETAIL_TAG_RULES: Record<string, string[]> = {
 };
 
 const SPORTS_TAG_ALIASES: Record<string, string[]> = {
-  야구장: ["야구장", "스카이돔", "랜더스필드", "라이온즈파크", "챔피언스필드", "위즈파크", "볼파크", "NC파크"],
-  축구장: ["축구장", "월드컵경기장", "축구전용구장", "스틸야드", "축구센터", "스타디움"],
-  배구장: ["배구", "체육관", "실내체육관", "아레나", "페퍼스타디움"],
+  "야구장": ["야구장", "스카이돔", "랜더스필드", "라이온즈파크", "챔피언스필드", "위즈파크", "볼파크", "NC파크"],
+  "축구장": ["축구장", "월드컵경기장", "축구전용구장", "스틸야드", "축구센터", "스타디움"],
+  "배구장": ["배구", "체육관", "실내체육관", "아레나", "페퍼스타디움"],
 };
 
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function normalizeText(value: string) {
-  return value.trim().toLowerCase();
-}
-
 function inferTags(place: PlaceApiResult) {
-  const sourceText = [place.title, place.category_label, place.overview, place.addr1, place.addr2]
+  const sourceText = [
+    place.title,
+    place.category_label,
+    place.overview,
+    place.addr1,
+    place.addr2,
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -133,69 +155,35 @@ function buildNearbyActivities(place: PlaceApiResult) {
     .slice(0, 4);
 }
 
-function mapPlaceToAttraction(place: PlaceApiResult, region: string, baseScore = 60): AttractionResult {
+function mapPlaceToAttraction(place: PlaceApiResult): AttractionResult {
   return {
     id: place.content_id,
     name: place.title,
     location: [place.addr1, place.addr2].filter(Boolean).join(" "),
-    score: baseScore,
+    score: 60,
     imageUrl: place.image_url || place.thumbnail_url || FALLBACK_IMAGE,
     category: place.category_label || "관광지",
-    region,
     tags: inferTags(place),
     keywordTags: place.keyword_tags ?? [],
     nearbyActivities: buildNearbyActivities(place),
   };
 }
 
-function keywordMatchesAttraction(keyword: string, attraction: AttractionResult) {
-  const normalizedKeyword = normalizeText(keyword);
-  const normalizedCategory = normalizeText(attraction.category);
-
-  if (normalizedCategory.includes(normalizedKeyword) || normalizedKeyword.includes(normalizedCategory)) {
-    return true;
-  }
-
-  return attraction.tags.some((tag) => {
-    const normalizedTag = normalizeText(tag);
-    return normalizedTag.includes(normalizedKeyword) || normalizedKeyword.includes(normalizedTag);
-  });
-}
-
-function applyKeywordScoreBoost(attractions: AttractionResult[], keywords: string[]) {
-  if (keywords.length === 0) {
-    return [...attractions].sort((a, b) => b.score - a.score);
-  }
-
-  return [...attractions]
-    .map((attraction) => {
-      const matchedKeywordCount = keywords.filter((keyword) => keywordMatchesAttraction(keyword, attraction)).length;
-
-      const boostedScore = Math.min(
-        attraction.score + matchedKeywordCount * 4 + Math.max(matchedKeywordCount - 1, 0) * 3,
-        100
-      );
-
-      return {
-        ...attraction,
-        score: boostedScore,
-      };
-    })
-    .sort((a, b) => b.score - a.score);
-}
-
+// ==========================================
+// 메인 App 컴포넌트 시작
+// ==========================================
 export default function App() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isSignupOpen, setIsSignupOpen] = useState(false);
   const [isMyPageOpen, setIsMyPageOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchedRegion, setSearchedRegion] = useState("");
-  const [searchResults, setSearchResults] = useState<AttractionResult[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [filterKeywords, setFilterKeywords] = useState<string[]>([]);
-  const [filteredResults, setFilteredResults] = useState<AttractionResult[]>([]);
-  const [selectedAttraction, setSelectedAttraction] = useState<AttractionResult | null>(null);
+  const [filteredResults, setFilteredResults] = useState<any[]>([]);
+  const [selectedAttraction, setSelectedAttraction] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("한국어");
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
@@ -203,16 +191,15 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [hoveredAttractionId, setHoveredAttractionId] = useState<number | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem("tripgpt_current_user");
     if (savedUser) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
-  const handleLoginSuccess = (user: StoredUser) => setCurrentUser(user);
+  const handleLoginSuccess = (user: any) => setCurrentUser(user);
   const handleSignupSuccess = () => setIsLoginOpen(true);
-  const handleUserUpdate = (updatedUser: StoredUser) => setCurrentUser(updatedUser);
+  const handleUserUpdate = (updatedUser: any) => setCurrentUser(updatedUser);
 
   const handleLogout = () => {
     localStorage.removeItem("tripgpt_current_user");
@@ -239,7 +226,9 @@ export default function App() {
 
   const fetchRecommendation = async (region: string) => {
     try {
-      const res = await fetch(`${API_BASE}/places/recommendations/?region=${encodeURIComponent(region)}`);
+      const res = await fetch(
+        `${API_BASE}/places/recommendations/?region=${encodeURIComponent(region)}`
+      );
       if (!res.ok) return;
       const data: RecommendationResponse = await res.json();
       setRecommendation(data);
@@ -257,31 +246,39 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/places/?area_code=${encodeURIComponent(areaCode)}&page=${page}`);
+      const res = await fetch(
+        `${API_BASE}/api/places/?area_code=${encodeURIComponent(areaCode)}&page=${page}`
+      );
       if (!res.ok) throw new Error("fetch failed");
 
-      const data: { count: number; page: number; total_pages: number; results: PlaceApiResult[] } = await res.json();
+      const data: { count: number; page: number; total_pages: number; results: PlaceApiResult[] } =
+        await res.json();
 
-      const baseScore = recommendation?.final_score || 60;
-      const results = data.results.map((place) => mapPlaceToAttraction(place, region, baseScore));
+      const results = data.results.map(mapPlaceToAttraction);
 
       setTotalCount(data.count);
       setTotalPages(data.total_pages);
       setCurrentPage(page);
 
+      // 선호 키워드 정렬
       let preferredKeywords: string[] = [];
       if (currentUser?.email) {
         const saved = localStorage.getItem(`tripgpt_keywords_${currentUser.email}`);
         if (saved) preferredKeywords = JSON.parse(saved);
       }
 
-      const activeKeywords = unique([...preferredKeywords, ...filterKeywords]);
-
-      if (activeKeywords.length > 0) {
-        const boostedResults = applyKeywordScoreBoost(results, activeKeywords);
-        setSearchResults(results);
-        setFilteredResults(boostedResults);
-        setFilterKeywords(activeKeywords);
+      if (preferredKeywords.length > 0) {
+        const matched = results.filter((a) =>
+          preferredKeywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
+        );
+        const unmatched = results.filter((a) =>
+          !preferredKeywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
+        );
+        setSearchResults([
+          ...matched.sort((a, b) => b.score - a.score),
+          ...unmatched.sort((a, b) => b.score - a.score),
+        ]);
+        setFilterKeywords(preferredKeywords);
       } else {
         setSearchResults(results.sort((a, b) => b.score - a.score));
         setFilterKeywords([]);
@@ -289,12 +286,11 @@ export default function App() {
       }
 
       setSearchedRegion(region);
-      toast.success(`${region} 지역 장소 ${data.count}개 중 ${data.results.length}개를 불러왔습니다.`);
+      toast.success(`${region} 지역 장소 ${data.count}개 중 ${PAGE_SIZE}개를 불러왔습니다.`);
     } catch (e) {
       console.error(e);
       toast.error("장소 데이터를 불러오지 못했습니다.");
       setSearchResults([]);
-      setFilteredResults([]);
     }
   };
 
@@ -327,22 +323,25 @@ export default function App() {
       setFilteredResults([]);
       return;
     }
-
-    const boostedResults = applyKeywordScoreBoost(searchResults, keywords);
-    setFilteredResults(boostedResults);
-
-    const matchedCount = boostedResults.filter((a) => keywords.some((kw) => keywordMatchesAttraction(kw, a))).length;
-
-    if (matchedCount === 0) toast.info("선택한 키워드와 일치하는 관광지가 없습니다.");
-    else toast.success(`키워드와 일치하는 관광지 ${matchedCount}개를 찾았습니다.`);
+    const matched = searchResults.filter((a) =>
+      keywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
+    );
+    const unmatched = searchResults.filter(
+      (a) => !keywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
+    );
+    setFilteredResults([...matched, ...unmatched]);
+    if (matched.length === 0) toast.info("선택한 키워드와 일치하는 관광지가 없습니다.");
+    else toast.success(`키워드와 일치하는 관광지 ${matched.length}개를 찾았습니다.`);
   };
 
-  const isAttractionPreferred = (attraction: AttractionResult) => {
+  const isAttractionPreferred = (attraction: any) => {
     if (!currentUser?.email) return false;
     const saved = localStorage.getItem(`tripgpt_keywords_${currentUser.email}`);
     if (!saved) return false;
     const keywords = JSON.parse(saved);
-    return keywords.some((kw: string) => keywordMatchesAttraction(kw, attraction));
+    return keywords.some((kw: string) =>
+      attraction.tags.some((t: string) => t.includes(kw) || kw.includes(t))
+    );
   };
 
   const getPaginationRange = () => {
@@ -390,8 +389,10 @@ export default function App() {
                 onClick={handleLogoClick}
                 className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer hover:scale-105"
               >
-                <Globe className="w-6 h-6" />
-                <Plane className="w-4 h-4 rotate-45" />
+                <div className="relative">
+                  <Globe className="w-6 h-6" />
+                  <Plane className="absolute -right-1 -top-1 w-4 h-4 rotate-45" />
+                </div>
                 <h1 className="text-white">TripGpt</h1>
               </motion.button>
               <div className="hidden sm:flex items-center gap-1.5 text-sm text-gray-600 bg-gray-50 px-3 py-1.5 rounded-full">
@@ -416,8 +417,7 @@ export default function App() {
                     { label: "中文", flag: "🇨🇳" },
                   ].map(({ label, flag }) => (
                     <DropdownMenuItem key={label} onClick={() => handleLanguageChange(label)}>
-                      <span className="mr-2">{flag}</span>
-                      {label}
+                      <span className="mr-2">{flag}</span>{label}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -451,34 +451,18 @@ export default function App() {
         </div>
       </motion.header>
 
-      <LoginDialog
-        open={isLoginOpen}
-        onOpenChange={setIsLoginOpen}
-        onSignupClick={() => setIsSignupOpen(true)}
-        onLoginSuccess={handleLoginSuccess}
-      />
+      <LoginDialog open={isLoginOpen} onOpenChange={setIsLoginOpen} onSignupClick={() => setIsSignupOpen(true)} onLoginSuccess={handleLoginSuccess} />
       <SignupDialog open={isSignupOpen} onOpenChange={setIsSignupOpen} onSignupSuccess={handleSignupSuccess} />
-      <MyPageDialog
-        open={isMyPageOpen}
-        onOpenChange={setIsMyPageOpen}
-        currentUser={currentUser}
-        onUserUpdate={handleUserUpdate}
-      />
+      <MyPageDialog open={isMyPageOpen} onOpenChange={setIsMyPageOpen} currentUser={currentUser} onUserUpdate={handleUserUpdate} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {!hasSearched ? (
-          <SearchBar
-            value={searchKeyword}
-            onChange={setSearchKeyword}
-            onSearch={handlePlacesSearch}
-            disabled={false}
-            centered={true}
-          />
+          <SearchBar value={searchKeyword} onChange={setSearchKeyword} onSearch={handlePlacesSearch} disabled={false} centered={true} />
         ) : (
           <>
             <SearchBar value={searchKeyword} onChange={setSearchKeyword} onSearch={handlePlacesSearch} />
 
-            {/* 추천 점수 */}
+            {/* 추천 점수 결과 */}
             {recommendation && (
               <div className="max-w-2xl mx-auto mt-6 p-5 bg-white rounded-2xl shadow border border-gray-100">
                 <h3 className="text-xl font-bold mb-3">{recommendation.region} 추천 결과</h3>
@@ -490,9 +474,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-2 text-gray-700">
-                    <p>
-                      최종 점수: <span className="font-semibold">{recommendation.final_score}</span>
-                    </p>
+                    <p>최종 점수: <span className="font-semibold">{recommendation.final_score}</span></p>
                     <p>날씨 점수: {recommendation.weather_score}</p>
                     <p>거리 점수: {recommendation.distance_score}</p>
                     <p>키워드 점수: {recommendation.keyword_score}</p>
@@ -507,13 +489,7 @@ export default function App() {
                   <span className="text-2xl">✈️</span>
                   <div className="flex gap-1">
                     {[0, 200, 400].map((delay) => (
-                      <span
-                        key={delay}
-                        className="text-blue-400 animate-pulse"
-                        style={{ animationDelay: `${delay}ms` }}
-                      >
-                        •
-                      </span>
+                      <span key={delay} className="text-blue-400 animate-pulse" style={{ animationDelay: `${delay}ms` }}>•</span>
                     ))}
                   </div>
                   <p className="text-blue-600 font-semibold">{searchedRegion || searchKeyword}의 관광지를 찾는 중...</p>
@@ -537,7 +513,7 @@ export default function App() {
                     {searchedRegion}의 추천 관광지
                   </h2>
                   <p className="text-gray-600 text-sm">
-                    총 {totalCount}개 중 {displayResults.length}개 표시
+                    총 {totalCount}개 중 {PAGE_SIZE}개 표시
                     {filterKeywords.length > 0 && ` • ${filterKeywords.length}개 필터 적용됨`}
                   </p>
                 </div>
@@ -548,19 +524,10 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {displayResults.map((attraction) => {
-                    const isMatched =
-                      filterKeywords.length > 0 &&
-                      filterKeywords.some((kw) => keywordMatchesAttraction(kw, attraction));
-
-                    const isPreferred = isAttractionPreferred(attraction);
-                    const isHovered = hoveredAttractionId === attraction.id;
-                    const isDimmed = hoveredAttractionId !== null && hoveredAttractionId !== attraction.id;
-
+                    const isMatched = filterKeywords.length > 0 &&
+                      filterKeywords.some((kw) => attraction.tags.some((t: string) => t.includes(kw) || kw.includes(t)));
                     return (
-                      <div
-                        key={attraction.id}
-                        className={isMatched ? "ring-2 ring-blue-500 rounded-2xl shadow-lg shadow-blue-100" : ""}
-                      >
+                      <div key={attraction.id} className={isMatched ? "ring-2 ring-blue-500 rounded-2xl shadow-lg shadow-blue-100" : ""}>
                         <DestinationCard
                           name={attraction.name}
                           location={attraction.location}
@@ -569,22 +536,15 @@ export default function App() {
                           category={attraction.category}
                           keywordTags={attraction.keywordTags}
                           showScore={!!currentUser}
-                          isPreferred={isPreferred}
-                          isHovered={isHovered}
-                          isDimmed={isDimmed}
-                          onMouseEnter={() => setHoveredAttractionId(attraction.id)}
-                          onMouseLeave={() => setHoveredAttractionId(null)}
-                          onClick={() => {
-                            setSelectedAttraction(attraction);
-                            setIsDetailOpen(true);
-                          }}
+                          isPreferred={isAttractionPreferred(attraction)}
+                          onClick={() => { setSelectedAttraction(attraction); setIsDetailOpen(true); }}
                         />
                       </div>
                     );
                   })}
                 </div>
 
-                {/* 페이지네이션 */}
+                {/* 페이지네이션 UI */}
                 {totalPages > 1 && (
                   <div className="flex justify-center items-center gap-1 mt-10">
                     <button
@@ -597,15 +557,15 @@ export default function App() {
 
                     {getPaginationRange().map((item, idx) =>
                       item === "..." ? (
-                        <span key={`dot-${idx}`} className="px-2 text-gray-400">
-                          ...
-                        </span>
+                        <span key={`dot-${idx}`} className="px-2 text-gray-400">...</span>
                       ) : (
                         <button
                           key={item}
                           onClick={() => handlePageChange(item as number)}
                           className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
-                            currentPage === item ? "bg-blue-600 text-white shadow" : "hover:bg-gray-100 text-gray-700"
+                            currentPage === item
+                              ? "bg-blue-600 text-white shadow"
+                              : "hover:bg-gray-100 text-gray-700"
                           }`}
                         >
                           {item}
@@ -642,10 +602,7 @@ export default function App() {
                       key={region}
                       variant="outline"
                       className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all"
-                      onClick={() => {
-                        setSearchKeyword(region);
-                        setTimeout(handlePlacesSearch, 0);
-                      }}
+                      onClick={() => { setSearchKeyword(region); setTimeout(handlePlacesSearch, 0); }}
                     >
                       {region}
                     </Button>
