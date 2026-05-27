@@ -11,20 +11,23 @@ from places.recommendation.data_providers import REGION_AREA_CODE_MAP, normalize
 from places.recommendation.service import calculate_recommendation_score
 from places.serializers import TourismPlaceSerializer
 
+PAGE_SIZE = 50
+
 
 class TourismPlaceListAPIView(APIView):
     def get(self, request):
-        queryset = TourismPlace.objects.filter(is_active=True).order_by("title")
+        queryset = TourismPlace.objects.filter(is_active=True).order_by("-id")  # score 없으니 id 기준
 
         region = normalize_region_name((request.GET.get("region") or "").strip())
         area_code = (request.GET.get("area_code") or "").strip()
         sigungu_code = (request.GET.get("sigungu_code") or "").strip()
         category_key = (request.GET.get("category") or "").strip()
         content_type_id = (request.GET.get("content_type_id") or "").strip()
+
         try:
-            limit = min(max(int(request.GET.get("limit", 100)), 1), 5000)
+            page = max(int(request.GET.get("page", 1)), 1)
         except ValueError:
-            limit = 100
+            page = 1
 
         if not area_code and region:
             area_code = REGION_AREA_CODE_MAP.get(region, "")
@@ -42,13 +45,17 @@ class TourismPlaceListAPIView(APIView):
         if keyword_tag:
             queryset = queryset.filter(keyword_tags__contains=keyword_tag)
 
-        serializer = TourismPlaceSerializer(queryset[:limit], many=True)
-        return Response(
-            {
-                "count": queryset.count(),
-                "results": serializer.data,
-            }
-        )
+        total = queryset.count()
+        offset = (page - 1) * PAGE_SIZE
+        serializer = TourismPlaceSerializer(queryset[offset:offset + PAGE_SIZE], many=True)
+
+        return Response({
+            "count": total,
+            "page": page,
+            "page_size": PAGE_SIZE,
+            "total_pages": (total + PAGE_SIZE - 1) // PAGE_SIZE,
+            "results": serializer.data,
+        })
 
 
 class KeywordClassificationAPIView(APIView):
