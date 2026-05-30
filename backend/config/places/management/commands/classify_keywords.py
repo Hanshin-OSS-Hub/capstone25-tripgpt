@@ -42,6 +42,9 @@ class Command(BaseCommand):
                 overview=place.overview,
                 addr1=place.addr1,
                 addr2=place.addr2,
+                cat1=place.cat1,
+                cat2=place.cat2,
+                cat3=place.cat3,
             )
             place.keyword_tags = tags
             batch.append(place)
