@@ -1,9 +1,11 @@
-# backend/web/urls.py
-
+# web/urls.py
 from django.urls import path
-from .views import TravelAPIView   
+from .views import TravelAPIView, SignupAPIView, LoginAPIView, LogoutAPIView, MeAPIView
 
 urlpatterns = [
-    # 최종 URL: /api/tmap/route/
     path("tmap/route/", TravelAPIView.as_view(), name="tmap-route"),
+    path("auth/signup/", SignupAPIView.as_view(), name="auth-signup"),
+    path("auth/login/", LoginAPIView.as_view(), name="auth-login"),
+    path("auth/logout/", LogoutAPIView.as_view(), name="auth-logout"),
+    path("auth/me/", MeAPIView.as_view(), name="auth-me"),
 ]

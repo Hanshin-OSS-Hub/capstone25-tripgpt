@@ -19,30 +19,37 @@ import {
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu";
 
-const API_BASE_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:8000/api"
-).replace(/\/$/, "");
+// ==========================================
+// 기존 places.ts 분리 대상이었던 상수 및 유틸 함수 통합
+// ==========================================
+const API_BASE = "http://127.0.0.1:8000";
+const PAGE_SIZE = 50;
 
 const REGION_OPTIONS = [
-  "서울",
-  "경기",
-  "인천",
-  "부산",
-  "대구",
-  "광주",
-  "대전",
-  "울산",
-  "세종",
-  "강원",
-  "충북",
-  "충남",
-  "전북",
-  "전남",
-  "경북",
-  "경남",
-  "제주",
-  "경주",
+  "서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산", "세종",
+  "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주", "경주",
 ];
+
+const REGION_AREA_CODES: Record<string, string> = {
+  "서울": "1",
+  "인천": "2",
+  "대전": "3",
+  "대구": "4",
+  "광주": "5",
+  "부산": "6",
+  "울산": "7",
+  "세종": "8",
+  "경기": "31",
+  "강원": "32",
+  "충북": "33",
+  "충남": "34",
+  "전북": "35",
+  "전남": "36",
+  "경북": "37",
+  "경남": "38",
+  "제주": "39",
+  "경주": "37",
+};
 
 interface RecommendationResponse {
   region: string;
@@ -55,6 +62,7 @@ interface RecommendationResponse {
   details?: {
     selected_keywords?: string[];
     destination_keywords?: string[];
+    message?: string;
   };
 }
 
@@ -68,23 +76,7 @@ interface PlaceApiResult {
   image_url?: string;
   thumbnail_url?: string;
   overview?: string;
-  recommendation_score?: {
-    final_score?: number;
-    category_score?: number;
-    keyword_score?: number;
-  };
-}
-
-interface PlaceSearchResponse {
-  count: number;
-  results: PlaceApiResult[];
-}
-
-interface StoredUser {
-  userId?: string;
-  username?: string;
-  email?: string;
-  preferredKeywords?: string[];
+  keyword_tags?: string[];
 }
 
 interface AttractionResult {
@@ -94,8 +86,8 @@ interface AttractionResult {
   score: number;
   imageUrl: string;
   category: string;
-  region: string;
   tags: string[];
+  keywordTags: string[];
   nearbyActivities: string[];
 }
 
@@ -112,39 +104,13 @@ const DETAIL_TAG_RULES: Record<string, string[]> = {
 };
 
 const SPORTS_TAG_ALIASES: Record<string, string[]> = {
-  "야구장": [
-    "야구장",
-    "스카이돔",
-    "랜더스필드",
-    "라이온즈파크",
-    "챔피언스필드",
-    "위즈파크",
-    "볼파크",
-    "NC파크",
-  ],
-  "축구장": [
-    "축구장",
-    "월드컵경기장",
-    "축구전용구장",
-    "스틸야드",
-    "축구센터",
-    "스타디움",
-  ],
-  "배구장": [
-    "배구",
-    "체육관",
-    "실내체육관",
-    "아레나",
-    "페퍼스타디움",
-  ],
+  "야구장": ["야구장", "스카이돔", "랜더스필드", "라이온즈파크", "챔피언스필드", "위즈파크", "볼파크", "NC파크"],
+  "축구장": ["축구장", "월드컵경기장", "축구전용구장", "스틸야드", "축구센터", "스타디움"],
+  "배구장": ["배구", "체육관", "실내체육관", "아레나", "페퍼스타디움"],
 };
 
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
-}
-
-function normalizeText(value: string) {
-  return value.trim().toLowerCase();
 }
 
 function inferTags(place: PlaceApiResult) {
@@ -181,10 +147,7 @@ function inferTags(place: PlaceApiResult) {
 }
 
 function buildNearbyActivities(place: PlaceApiResult) {
-  if (!place.overview) {
-    return [];
-  }
-
+  if (!place.overview) return [];
   return place.overview
     .split(/[.]/)
     .map((item) => item.trim())
@@ -192,137 +155,51 @@ function buildNearbyActivities(place: PlaceApiResult) {
     .slice(0, 4);
 }
 
-function mapPlaceToAttraction(
-  place: PlaceApiResult,
-  region: string,
-  baseScore = 60
-): AttractionResult {
+function mapPlaceToAttraction(place: PlaceApiResult): AttractionResult {
   return {
     id: place.content_id,
     name: place.title,
     location: [place.addr1, place.addr2].filter(Boolean).join(" "),
-    score: place.recommendation_score?.final_score ?? baseScore,
+    score: 60,
     imageUrl: place.image_url || place.thumbnail_url || FALLBACK_IMAGE,
     category: place.category_label || "관광지",
-    region,
     tags: inferTags(place),
+    keywordTags: place.keyword_tags ?? [],
     nearbyActivities: buildNearbyActivities(place),
   };
 }
 
-function keywordMatchesAttraction(keyword: string, attraction: AttractionResult) {
-  const normalizedKeyword = normalizeText(keyword);
-  const normalizedCategory = normalizeText(attraction.category);
-
-  if (
-    normalizedCategory.includes(normalizedKeyword) ||
-    normalizedKeyword.includes(normalizedCategory)
-  ) {
-    return true;
-  }
-
-  return attraction.tags.some((tag) => {
-    const normalizedTag = normalizeText(tag);
-    return (
-      normalizedTag.includes(normalizedKeyword) ||
-      normalizedKeyword.includes(normalizedTag)
-    );
-  });
-}
-
-function applyKeywordScoreBoost(
-  attractions: AttractionResult[],
-  keywords: string[]
-) {
-  if (keywords.length === 0) {
-    return [...attractions].sort((a, b) => b.score - a.score);
-  }
-
-  return [...attractions]
-    .map((attraction) => {
-      const matchedKeywordCount = keywords.filter((keyword) =>
-        keywordMatchesAttraction(keyword, attraction)
-      ).length;
-
-      const boostedScore = Math.min(
-        attraction.score +
-          matchedKeywordCount * 4 +
-          Math.max(matchedKeywordCount - 1, 0) * 3,
-        100
-      );
-
-      return {
-        ...attraction,
-        score: boostedScore,
-      };
-    })
-    .sort((a, b) => b.score - a.score);
-}
-
-function getSavedPreferredKeywords(currentUser: StoredUser | null) {
-  if (!currentUser?.email) {
-    return [];
-  }
-
-  try {
-    const raw = localStorage.getItem(`tripgpt_keywords_${currentUser.email}`);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-  } catch {
-    return [];
-  }
-}
-
+// ==========================================
+// 메인 App 컴포넌트 시작
+// ==========================================
 export default function App() {
-  const [searchKeyword, setSearchKeyword] = useState("");
-  const [searchedRegion, setSearchedRegion] = useState("");
-  const [searchResults, setSearchResults] = useState<AttractionResult[]>([]);
-  const [filteredResults, setFilteredResults] = useState<AttractionResult[]>([]);
-  const [filterKeywords, setFilterKeywords] = useState<string[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("한국어");
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isSignupOpen, setIsSignupOpen] = useState(false);
   const [isMyPageOpen, setIsMyPageOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
-  const [selectedAttraction, setSelectedAttraction] =
-    useState<AttractionResult | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [searchedRegion, setSearchedRegion] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [filterKeywords, setFilterKeywords] = useState<string[]>([]);
+  const [filteredResults, setFilteredResults] = useState<any[]>([]);
+  const [selectedAttraction, setSelectedAttraction] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [hoveredAttractionId, setHoveredAttractionId] = useState<number | null>(
-    null
-  );
+  const [selectedLanguage, setSelectedLanguage] = useState("한국어");
+  const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("tripgpt_current_user");
-      if (stored) {
-        setCurrentUser(JSON.parse(stored));
-      }
-    } catch {
-      setCurrentUser(null);
-    }
+    const savedUser = localStorage.getItem("tripgpt_current_user");
+    if (savedUser) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
-  const displayedResults = useMemo(() => {
-    const results = filteredResults.length > 0 ? filteredResults : searchResults;
-    return results.slice(0, 40);
-  }, [filteredResults, searchResults]);
-
-  const handleLoginSuccess = (user: StoredUser) => {
-    setCurrentUser(user);
-  };
-
-  const handleSignupSuccess = () => {
-    setIsLoginOpen(true);
-  };
-
-  const handleUserUpdate = (updatedUser: StoredUser) => {
-    setCurrentUser(updatedUser);
-  };
+  const handleLoginSuccess = (user: any) => setCurrentUser(user);
+  const handleSignupSuccess = () => setIsLoginOpen(true);
+  const handleUserUpdate = (updatedUser: any) => setCurrentUser(updatedUser);
 
   const handleLogout = () => {
     localStorage.removeItem("tripgpt_current_user");
@@ -330,21 +207,16 @@ export default function App() {
     toast.success("로그아웃되었습니다.");
   };
 
-  const handleMyPageClick = () => {
-    if (!currentUser) {
-      setIsLoginOpen(true);
-      return;
-    }
-    setIsMyPageOpen(true);
-  };
-
   const handleLogoClick = () => {
     setSearchKeyword("");
     setSearchedRegion("");
     setSearchResults([]);
-    setFilteredResults([]);
+    setHasSearched(false);
     setFilterKeywords([]);
-      setHasSearched(false);
+    setFilteredResults([]);
+    setCurrentPage(1);
+    setTotalPages(1);
+    setRecommendation(null);
   };
 
   const handleLanguageChange = (language: string) => {
@@ -352,114 +224,142 @@ export default function App() {
     toast.success(`언어가 ${language}로 변경되었습니다.`);
   };
 
-  const isAttractionPreferred = (attraction: AttractionResult) => {
-    const preferredKeywords = getSavedPreferredKeywords(currentUser);
-    if (preferredKeywords.length === 0) {
-      return false;
+  const fetchRecommendation = async (region: string) => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/places/recommendations/?region=${encodeURIComponent(region)}`
+      );
+      if (!res.ok) return;
+      const data: RecommendationResponse = await res.json();
+      setRecommendation(data);
+      if (data.has_alert) toast.warning(`${data.region} 지역에 기상 특보가 있습니다.`);
+    } catch (e) {
+      console.error(e);
     }
-
-    return preferredKeywords.some((keyword) =>
-      keywordMatchesAttraction(keyword, attraction)
-    );
   };
 
-  const fetchRecommendation = async (region: string, keywords: string[]) => {
-    const params = new URLSearchParams({
-      region,
-      keywords: keywords.join(","),
-    });
-
-    const response = await fetch(
-      `${API_BASE_URL}/places/recommendations/?${params.toString()}`
-    );
-
-    if (!response.ok) {
-      throw new Error("추천 점수 조회 실패");
-    }
-
-    return (await response.json()) as RecommendationResponse;
-  };
-
-  const runSearch = async (regionInput: string) => {
-    const region = regionInput.trim();
-    if (!region) {
-      toast.error("지역명을 입력해 주세요.");
+  const fetchPlaces = async (region: string, page: number) => {
+    const areaCode = REGION_AREA_CODES[region];
+    if (!areaCode) {
+      toast.error(`"${region}" 지역은 아직 지원하지 않습니다.`);
       return;
     }
 
-    setIsSearching(true);
-    setHasSearched(true);
-
     try {
-      const preferredKeywords = getSavedPreferredKeywords(currentUser);
-      const activeKeywords = unique([...preferredKeywords, ...filterKeywords]);
-
-      const placeParams = new URLSearchParams({
-        region,
-        limit: "200",
-      });
-
-      const recommendationPromise = fetchRecommendation(region, activeKeywords);
-      const placePromise = fetch(
-        `${API_BASE_URL}/places/search/?${placeParams.toString()}`
+      const res = await fetch(
+        `${API_BASE}/api/places/?area_code=${encodeURIComponent(areaCode)}&page=${page}`
       );
+      if (!res.ok) throw new Error("fetch failed");
 
-      const [recommendationData, placesResponse] = await Promise.all([
-        recommendationPromise,
-        placePromise,
-      ]);
+      const data: { count: number; page: number; total_pages: number; results: PlaceApiResult[] } =
+        await res.json();
 
-      if (!placesResponse.ok) {
-        throw new Error("장소 조회 실패");
+      const results = data.results.map(mapPlaceToAttraction);
+
+      setTotalCount(data.count);
+      setTotalPages(data.total_pages);
+      setCurrentPage(page);
+
+      // 선호 키워드 정렬
+      let preferredKeywords: string[] = [];
+      if (currentUser?.email) {
+        const saved = localStorage.getItem(`tripgpt_keywords_${currentUser.email}`);
+        if (saved) preferredKeywords = JSON.parse(saved);
       }
 
-      const placesData = (await placesResponse.json()) as PlaceSearchResponse;
-      const mappedResults = placesData.results.map((place) =>
-        mapPlaceToAttraction(place, region, recommendationData.final_score)
-      );
-      const boostedResults = applyKeywordScoreBoost(mappedResults, activeKeywords);
-
-      setSearchResults(mappedResults);
-      setFilteredResults(boostedResults);
-      setFilterKeywords(activeKeywords);
-      setSearchedRegion(region);
-
-      if (boostedResults.length === 0) {
-        toast.info("검색 결과가 없습니다.");
+      if (preferredKeywords.length > 0) {
+        const matched = results.filter((a) =>
+          preferredKeywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
+        );
+        const unmatched = results.filter((a) =>
+          !preferredKeywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
+        );
+        setSearchResults([
+          ...matched.sort((a, b) => b.score - a.score),
+          ...unmatched.sort((a, b) => b.score - a.score),
+        ]);
+        setFilterKeywords(preferredKeywords);
       } else {
-        toast.success(`${boostedResults.length}개의 장소를 찾았습니다.`);
+        setSearchResults(results.sort((a, b) => b.score - a.score));
+        setFilterKeywords([]);
+        setFilteredResults([]);
       }
-    } catch (error) {
-      console.error(error);
-      toast.error("지역 검색 중 오류가 발생했습니다.");
+
+      setSearchedRegion(region);
+      toast.success(`${region} 지역 장소 ${data.count}개 중 ${PAGE_SIZE}개를 불러왔습니다.`);
+    } catch (e) {
+      console.error(e);
+      toast.error("장소 데이터를 불러오지 못했습니다.");
       setSearchResults([]);
-      setFilteredResults([]);
-    } finally {
-      setIsSearching(false);
     }
   };
 
-  const handleSearch = async () => {
-    await runSearch(searchKeyword);
+  const handlePlacesSearch = async () => {
+    if (!searchKeyword.trim()) {
+      toast.error("검색어를 입력해주세요.");
+      return;
+    }
+    const keyword = searchKeyword.trim();
+    setHasSearched(true);
+    setIsSearching(true);
+    setCurrentPage(1);
+    setFilterKeywords([]);
+    setFilteredResults([]);
+
+    await Promise.all([fetchRecommendation(keyword), fetchPlaces(keyword, 1)]);
+    setIsSearching(false);
   };
 
-  const handleKeywordsChange = async (keywords: string[]) => {
-    setFilterKeywords(keywords);
+  const handlePageChange = async (page: number) => {
+    setIsSearching(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    await fetchPlaces(searchedRegion, page);
+    setIsSearching(false);
+  };
 
-    if (!searchedRegion) {
+  const handleKeywordsChange = (keywords: string[]) => {
+    setFilterKeywords(keywords);
+    if (keywords.length === 0) {
       setFilteredResults([]);
       return;
     }
-
-    const boostedResults = applyKeywordScoreBoost(searchResults, keywords);
-    setFilteredResults(boostedResults);
-
-    try {
-      await fetchRecommendation(searchedRegion, keywords);
-    } catch (error) {
-      console.error(error);
-    }
+    const matched = searchResults.filter((a) =>
+      keywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
+    );
+    const unmatched = searchResults.filter(
+      (a) => !keywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
+    );
+    setFilteredResults([...matched, ...unmatched]);
+    if (matched.length === 0) toast.info("선택한 키워드와 일치하는 관광지가 없습니다.");
+    else toast.success(`키워드와 일치하는 관광지 ${matched.length}개를 찾았습니다.`);
   };
+
+  const isAttractionPreferred = (attraction: any) => {
+    if (!currentUser?.email) return false;
+    const saved = localStorage.getItem(`tripgpt_keywords_${currentUser.email}`);
+    if (!saved) return false;
+    const keywords = JSON.parse(saved);
+    return keywords.some((kw: string) =>
+      attraction.tags.some((t: string) => t.includes(kw) || kw.includes(t))
+    );
+  };
+
+  const getPaginationRange = () => {
+    const delta = 2;
+    const range: (number | "...")[] = [];
+    const left = Math.max(2, currentPage - delta);
+    const right = Math.min(totalPages - 1, currentPage + delta);
+
+    range.push(1);
+    if (left > 2) range.push("...");
+    for (let i = left; i <= right; i++) range.push(i);
+    if (right < totalPages - 1) range.push("...");
+    if (totalPages > 1) range.push(totalPages);
+
+    return range;
+  };
+
+  const displayResults = filteredResults.length > 0 ? filteredResults : searchResults;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -475,265 +375,234 @@ export default function App() {
           className="absolute inset-0 opacity-50"
           animate={{
             background: [
-              "linear-gradient(120deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.25) 25%, rgba(139, 92, 246, 0.35) 50%, rgba(236, 72, 153, 0.25) 75%, rgba(59, 130, 246, 0.15) 100%)",
-              "linear-gradient(120deg, rgba(236, 72, 153, 0.25) 0%, rgba(59, 130, 246, 0.15) 25%, rgba(99, 102, 241, 0.25) 50%, rgba(139, 92, 246, 0.35) 75%, rgba(236, 72, 153, 0.25) 100%)",
-              "linear-gradient(120deg, rgba(139, 92, 246, 0.35) 0%, rgba(236, 72, 153, 0.25) 25%, rgba(59, 130, 246, 0.15) 50%, rgba(99, 102, 241, 0.25) 75%, rgba(139, 92, 246, 0.35) 100%)",
+              "linear-gradient(120deg, rgba(59,130,246,0.15) 0%, rgba(99,102,241,0.25) 25%, rgba(139,92,246,0.35) 50%, rgba(236,72,153,0.25) 75%, rgba(59,130,246,0.15) 100%)",
+              "linear-gradient(120deg, rgba(236,72,153,0.25) 0%, rgba(59,130,246,0.15) 25%, rgba(99,102,241,0.25) 50%, rgba(139,92,246,0.35) 75%, rgba(236,72,153,0.25) 100%)",
             ],
           }}
           transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
         />
 
-        <div className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <motion.button
-              onClick={handleLogoClick}
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              className="flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-white shadow-md transition-all hover:scale-105 hover:shadow-lg"
-            >
-              <div className="relative">
-                <Globe className="h-6 w-6" />
-                <Plane className="absolute -right-1 -top-1 h-4 w-4 rotate-45" />
-              </div>
-              <h1 className="text-white">TripGpt</h1>
-            </motion.button>
-
-            <div className="hidden items-center gap-1.5 rounded-full bg-gray-50 px-3 py-1.5 text-sm text-gray-600 sm:flex">
-              <span className="text-blue-600">국내</span>
-              <span>여행 추천</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2 hover:bg-gray-50">
-                  <Languages className="h-4 w-4" />
-                  <span className="hidden sm:inline">{selectedLanguage}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuItem onClick={() => handleLanguageChange("한국어")}>
-                  한국어
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleLanguageChange("English")}>
-                  English
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleLanguageChange("日本語")}>
-                  日本語
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleLanguageChange("中文")}>
-                  中文
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {currentUser ? (
-              <>
-                <button
-                  onClick={handleMyPageClick}
-                  className="flex cursor-pointer items-center gap-2 rounded-full bg-gray-50 px-4 py-2 transition-colors hover:bg-gray-100"
-                >
-                  <User className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm text-blue-600 hover:text-blue-700">
-                    {currentUser.username}님
-                  </span>
-                </button>
-                <Button variant="ghost" className="gap-2" onClick={handleLogout}>
-                  <LogOut className="h-4 w-4" />
-                  로그아웃
-                </Button>
-              </>
-            ) : (
-              <Button
-                className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                onClick={() => setIsLoginOpen(true)}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 relative z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <motion.button
+                onClick={handleLogoClick}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer hover:scale-105"
               >
-                <LogIn className="h-4 w-4" />
-                로그인
-              </Button>
-            )}
+                <div className="relative">
+                  <Globe className="w-6 h-6" />
+                  <Plane className="absolute -right-1 -top-1 w-4 h-4 rotate-45" />
+                </div>
+                <h1 className="text-white">TripGpt</h1>
+              </motion.button>
+              <div className="hidden sm:flex items-center gap-1.5 text-sm text-gray-600 bg-gray-50 px-3 py-1.5 rounded-full">
+                <span className="text-blue-600">🇰🇷</span>
+                <span>국내 여행 추천</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2 hover:bg-gray-50">
+                    <Languages className="w-4 h-4" />
+                    <span className="hidden sm:inline">{selectedLanguage}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  {[
+                    { label: "한국어", flag: "🇰🇷" },
+                    { label: "English", flag: "🇺🇸" },
+                    { label: "日本語", flag: "🇯🇵" },
+                    { label: "中文", flag: "🇨🇳" },
+                  ].map(({ label, flag }) => (
+                    <DropdownMenuItem key={label} onClick={() => handleLanguageChange(label)}>
+                      <span className="mr-2">{flag}</span>{label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {currentUser ? (
+                <>
+                  <button
+                    onClick={() => setIsMyPageOpen(true)}
+                    className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-full hover:bg-gray-100 transition-colors"
+                  >
+                    <User className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm text-blue-600">{currentUser.username}님</span>
+                  </button>
+                  <Button variant="ghost" className="gap-2" onClick={handleLogout}>
+                    <LogOut className="w-4 h-4" />
+                    로그아웃
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                  onClick={() => setIsLoginOpen(true)}
+                >
+                  <LogIn className="w-4 h-4" />
+                  로그인
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </motion.header>
 
-      <LoginDialog
-        open={isLoginOpen}
-        onOpenChange={setIsLoginOpen}
-        onSignupClick={() => setIsSignupOpen(true)}
-        onLoginSuccess={handleLoginSuccess}
-      />
+      <LoginDialog open={isLoginOpen} onOpenChange={setIsLoginOpen} onSignupClick={() => setIsSignupOpen(true)} onLoginSuccess={handleLoginSuccess} />
+      <SignupDialog open={isSignupOpen} onOpenChange={setIsSignupOpen} onSignupSuccess={handleSignupSuccess} />
+      <MyPageDialog open={isMyPageOpen} onOpenChange={setIsMyPageOpen} currentUser={currentUser} onUserUpdate={handleUserUpdate} />
 
-      <SignupDialog
-        open={isSignupOpen}
-        onOpenChange={setIsSignupOpen}
-        onSignupSuccess={handleSignupSuccess}
-      />
-
-      <MyPageDialog
-        open={isMyPageOpen}
-        onOpenChange={setIsMyPageOpen}
-        currentUser={currentUser}
-        onUserUpdate={handleUserUpdate}
-      />
-
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {!hasSearched ? (
-          <SearchBar
-            value={searchKeyword}
-            onChange={setSearchKeyword}
-            onSearch={handleSearch}
-            disabled={false}
-            centered
-          />
+          <SearchBar value={searchKeyword} onChange={setSearchKeyword} onSearch={handlePlacesSearch} disabled={false} centered={true} />
         ) : (
           <>
-            <SearchBar
-              value={searchKeyword}
-              onChange={setSearchKeyword}
-              onSearch={handleSearch}
-            />
+            <SearchBar value={searchKeyword} onChange={setSearchKeyword} onSearch={handlePlacesSearch} />
+
+            {/* 추천 점수 결과 */}
+            {recommendation && (
+              <div className="max-w-2xl mx-auto mt-6 p-5 bg-white rounded-2xl shadow border border-gray-100">
+                <h3 className="text-xl font-bold mb-3">{recommendation.region} 추천 결과</h3>
+                {recommendation.has_alert ? (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+                    <p className="font-semibold mb-2">기상 특보가 있습니다.</p>
+                    <p>{recommendation.alerts.join(", ")}</p>
+                    <p className="mt-2 text-sm">{recommendation.details?.message}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 text-gray-700">
+                    <p>최종 점수: <span className="font-semibold">{recommendation.final_score}</span></p>
+                    <p>날씨 점수: {recommendation.weather_score}</p>
+                    <p>거리 점수: {recommendation.distance_score}</p>
+                    <p>키워드 점수: {recommendation.keyword_score}</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {isSearching ? (
-              <>
-                <div className="mb-6 text-center">
-                  <div className="mb-2 flex items-center justify-center gap-2">
-                    <span className="text-2xl">🔍</span>
-                    <div className="flex gap-1">
-                      <span className="animate-pulse text-blue-400">.</span>
-                      <span className="animate-pulse text-blue-400 [animation-delay:200ms]">
-                        .
-                      </span>
-                      <span className="animate-pulse text-blue-400 [animation-delay:400ms]">
-                        .
-                      </span>
-                    </div>
+              <div className="mt-8">
+                <div className="flex items-center justify-center gap-2 mb-6">
+                  <span className="text-2xl">✈️</span>
+                  <div className="flex gap-1">
+                    {[0, 200, 400].map((delay) => (
+                      <span key={delay} className="text-blue-400 animate-pulse" style={{ animationDelay: `${delay}ms` }}>•</span>
+                    ))}
                   </div>
-                  <p className="font-semibold text-blue-600">
-                    {searchKeyword || "지역"}의 추천 장소를 찾는 중입니다...
-                  </p>
+                  <p className="text-blue-600 font-semibold">{searchedRegion || searchKeyword}의 관광지를 찾는 중...</p>
                 </div>
-
-                <div className="mb-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                  <div className="mb-3 h-7 w-52 animate-pulse rounded-md bg-slate-300" />
-                  <div className="h-4 w-36 animate-pulse rounded-md bg-slate-200" />
-                </div>
-
-                <div className="mb-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                  <div className="mb-4 h-5 w-40 animate-pulse rounded-md bg-slate-300" />
-                  <div className="flex flex-wrap gap-3">
-                    <div className="h-10 w-24 animate-pulse rounded-full bg-slate-200" />
-                    <div className="h-10 w-24 animate-pulse rounded-full bg-slate-200" />
-                    <div className="h-10 w-24 animate-pulse rounded-full bg-slate-200" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {[1, 2, 3].map((item) => (
-                    <div
-                      key={item}
-                      className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
-                    >
-                      <div className="h-56 w-full animate-pulse bg-slate-300" />
-                      <div className="p-5">
-                        <div className="mb-3 h-6 w-32 animate-pulse rounded-md bg-slate-300" />
-                        <div className="mb-4 h-4 w-40 animate-pulse rounded-md bg-slate-200" />
-                        <div className="h-7 w-20 animate-pulse rounded-full bg-slate-200" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+                      <div className="h-56 w-full bg-slate-300 animate-pulse" />
+                      <div className="p-5 space-y-3">
+                        <div className="h-6 w-32 rounded-md bg-slate-300 animate-pulse" />
+                        <div className="h-4 w-40 rounded-md bg-slate-200 animate-pulse" />
                       </div>
                     </div>
                   ))}
                 </div>
-              </>
-            ) : hasSearched && searchResults.length > 0 ? (
+              </div>
+            ) : searchResults.length > 0 ? (
               <>
-                <div className="mb-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                <div className="mb-6 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                   <h2 className="mb-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    {searchedRegion} 추천 장소
+                    {searchedRegion}의 추천 관광지
                   </h2>
-                  <p className="text-sm text-gray-600">
-                    총 {displayedResults.length}개의 장소
-                    {filterKeywords.length > 0 && ` · ${filterKeywords.length}개 필터 적용`}
+                  <p className="text-gray-600 text-sm">
+                    총 {totalCount}개 중 {PAGE_SIZE}개 표시
+                    {filterKeywords.length > 0 && ` • ${filterKeywords.length}개 필터 적용됨`}
                   </p>
                 </div>
 
                 <div className="mb-8">
-                  <ChatInput
-                    onKeywordsChange={handleKeywordsChange}
-                    selectedKeywords={filterKeywords}
-                  />
+                  <ChatInput onKeywordsChange={handleKeywordsChange} selectedKeywords={filterKeywords} />
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {displayedResults.map((attraction) => {
-                    const isMatched =
-                      filterKeywords.length > 0 &&
-                      filterKeywords.some((keyword) =>
-                        keywordMatchesAttraction(keyword, attraction)
-                      );
-
-                    const isPreferred = isAttractionPreferred(attraction);
-                    const isHovered = hoveredAttractionId === attraction.id;
-                    const isDimmed =
-                      hoveredAttractionId !== null &&
-                      hoveredAttractionId !== attraction.id;
-
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {displayResults.map((attraction) => {
+                    const isMatched = filterKeywords.length > 0 &&
+                      filterKeywords.some((kw) => attraction.tags.some((t: string) => t.includes(kw) || kw.includes(t)));
                     return (
-                      <div
-                        key={attraction.id}
-                        className={
-                          isMatched
-                            ? "rounded-2xl ring-2 ring-blue-500 shadow-lg shadow-blue-100"
-                            : ""
-                        }
-                      >
+                      <div key={attraction.id} className={isMatched ? "ring-2 ring-blue-500 rounded-2xl shadow-lg shadow-blue-100" : ""}>
                         <DestinationCard
                           name={attraction.name}
                           location={attraction.location}
                           score={attraction.score}
                           imageUrl={attraction.imageUrl}
                           category={attraction.category}
+                          keywordTags={attraction.keywordTags}
                           showScore={!!currentUser}
-                          isPreferred={isPreferred}
-                          isHovered={isHovered}
-                          isDimmed={isDimmed}
-                          onMouseEnter={() => setHoveredAttractionId(attraction.id)}
-                          onMouseLeave={() => setHoveredAttractionId(null)}
-                          onClick={() => {
-                            setSelectedAttraction(attraction);
-                            setIsDetailOpen(true);
-                          }}
+                          isPreferred={isAttractionPreferred(attraction)}
+                          onClick={() => { setSelectedAttraction(attraction); setIsDetailOpen(true); }}
                         />
                       </div>
                     );
                   })}
                 </div>
+
+                {/* 페이지네이션 UI */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center items-center gap-1 mt-10">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-30 hover:bg-gray-100 transition-colors"
+                    >
+                      ‹
+                    </button>
+
+                    {getPaginationRange().map((item, idx) =>
+                      item === "..." ? (
+                        <span key={`dot-${idx}`} className="px-2 text-gray-400">...</span>
+                      ) : (
+                        <button
+                          key={item}
+                          onClick={() => handlePageChange(item as number)}
+                          className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                            currentPage === item
+                              ? "bg-blue-600 text-white shadow"
+                              : "hover:bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-30 hover:bg-gray-100 transition-colors"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
               </>
-            ) : hasSearched && !isSearching && searchResults.length === 0 ? (
-              <div className="rounded-2xl border border-gray-100 bg-white py-20 text-center shadow-sm">
-                <div className="mb-4 text-4xl">📭</div>
-                <h3 className="mb-2">검색 결과가 없습니다</h3>
-                <p className="text-sm text-gray-500">
-                  다른 지역명으로 검색해보세요.
-                </p>
-              </div>
             ) : (
-              <div className="py-20 text-center">
+              <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
+                <div className="mb-4 text-4xl">🔍</div>
+                <h3 className="mb-2">검색 결과가 없습니다</h3>
+                <p className="text-sm text-gray-500">다른 지역명으로 검색해보세요</p>
+              </div>
+            )}
+
+            {/* 검색 전 지역 버튼 */}
+            {!hasSearched && (
+              <div className="text-center py-20">
                 <div className="mb-6 text-5xl">✈️</div>
                 <h2 className="mb-4">여행지를 검색해보세요</h2>
-                <p className="mb-8 text-gray-600">
-                  원하는 지역을 입력하면 추천 장소를 보여드립니다.
-                </p>
                 <div className="flex flex-wrap justify-center gap-3">
-                  {REGION_OPTIONS.map((region) => (
+                  {REGION_OPTIONS.filter((r) => r !== "제주도").map((region) => (
                     <Button
                       key={region}
                       variant="outline"
-                      className="transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
-                      onClick={() => {
-                        setSearchKeyword(region);
-                        void runSearch(region);
-                      }}
+                      className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all"
+                      onClick={() => { setSearchKeyword(region); setTimeout(handlePlacesSearch, 0); }}
                     >
                       {region}
                     </Button>

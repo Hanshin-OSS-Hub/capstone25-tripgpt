@@ -36,12 +36,27 @@ interface RouteInfo {
   steps: string[];
 }
 
+const CATEGORY_TAG_COLORS: Record<string, string> = {
+  자연:     "bg-green-100 text-green-700 border-green-200",
+  랜드마크: "bg-purple-100 text-purple-700 border-purple-200",
+  액티비티: "bg-orange-100 text-orange-700 border-orange-200",
+  스포츠:   "bg-red-100 text-red-700 border-red-200",
+  맛집:     "bg-yellow-100 text-yellow-700 border-yellow-200",
+  이벤트:   "bg-pink-100 text-pink-700 border-pink-200",
+  핫플:     "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200",
+  역사:     "bg-amber-100 text-amber-700 border-amber-200",
+  쇼핑:     "bg-cyan-100 text-cyan-700 border-cyan-200",
+};
+
+const TOP_CATEGORIES = new Set(Object.keys(CATEGORY_TAG_COLORS));
+
 interface Attraction {
   name: string;
   location: string;
   score: number;
   imageUrl: string;
   category: string;
+  keywordTags?: string[];
   nearbyActivities?: string[];
 }
 
@@ -102,26 +117,18 @@ export function AttractionDetailDialog({
     );
   };
 
-  const getTags = (category: string, score: number) => {
-    const tags: string[] = [category];
-
-    if (score >= 90) tags.push("강력 추천");
-    else if (score >= 80) tags.push("추천");
-
-    if (category === "문화/역사") tags.push("사진 명소");
-    if (category === "자연") tags.push("산책");
-    if (category === "액티비티") tags.push("체험");
-    if (category === "카페") tags.push("휴식");
-    if (category === "음식") tags.push("맛집");
-
-    return tags.slice(0, 3);
-  };
-
   const recommendationText = getRecommendationText(
     attraction.category,
     attraction.name
   );
-  const tags = getTags(attraction.category, attraction.score);
+
+  const keywordTags = attraction.keywordTags ?? [];
+  const categoryTags = keywordTags.filter((t) => TOP_CATEGORIES.has(t));
+  const subTags = keywordTags.filter((t) => !TOP_CATEGORIES.has(t));
+  const allTags = [...categoryTags, ...subTags];
+
+  const getTagStyle = (tag: string) =>
+    CATEGORY_TAG_COLORS[tag] ?? "bg-blue-50 text-blue-600 border-blue-100";
 
   const handleDirectionsClick = () => {
     setShowNearbyInfo(false);
@@ -904,17 +911,18 @@ export function AttractionDetailDialog({
                       )}
                     </div>
 
-                    <div className="relative z-10 flex flex-wrap gap-2">
-                      {tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full px-3 py-1.5 text-xs text-gray-600"
-                          style={summaryPill}
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                    {allTags.length > 0 && (
+                      <div className="relative z-10 flex flex-wrap gap-2">
+                        {allTags.map((tag) => (
+                          <span
+                            key={tag}
+                            className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium ${getTagStyle(tag)}`}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     <div style={{ ...softPanel, padding: 18 }}>
                       <p className="mb-2 text-sm font-medium text-gray-500">

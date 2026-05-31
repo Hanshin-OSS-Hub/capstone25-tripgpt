@@ -1,9 +1,11 @@
-from django.db.models import Q
+from collections import Counter
+
 from django.http import JsonResponse
 from django.views import View
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from places.keyword_classifier import CATEGORY_KEYWORDS, classify_place
 from places.models import TourismPlace
 from places.recommendation.data_providers import REGION_AREA_CODE_MAP, normalize_region_name
 from places.recommendation.score_rules import (
@@ -17,6 +19,8 @@ from places.recommendation.score_rules import (
 from places.recommendation.service import calculate_recommendation_score
 from places.recommendation.data_providers import get_weather_data
 from places.serializers import TourismPlaceSerializer
+
+PAGE_SIZE = 50
 
 
 DETAILED_REGION_ALIASES = {
@@ -50,25 +54,26 @@ def get_detailed_region_terms(region: str):
 
 class TourismPlaceListAPIView(APIView):
     def get(self, request):
-        queryset = TourismPlace.objects.filter(is_active=True).order_by("title")
+        queryset = TourismPlace.objects.filter(is_active=True).order_by("-id")  # score 없으니 id 기준
 
         region = normalize_region_name((request.GET.get("region") or "").strip())
         area_code = (request.GET.get("area_code") or "").strip()
         sigungu_code = (request.GET.get("sigungu_code") or "").strip()
         category_key = (request.GET.get("category") or "").strip()
         content_type_id = (request.GET.get("content_type_id") or "").strip()
-        keywords_param = request.GET.get("keywords", "")
-        selected_keywords = [k.strip() for k in keywords_param.split(",") if k.strip()]
+
         try:
-            limit = min(max(int(request.GET.get("limit", 100)), 1), 5000)
+            page = max(int(request.GET.get("page", 1)), 1)
         except ValueError:
-            limit = 100
+            page = 1
 
         detailed_region_keyword = ""
         if not area_code and region:
             area_code = REGION_AREA_CODE_MAP.get(region, "")
             if not area_code:
                 detailed_region_keyword = region
+
+        keyword_tag = (request.GET.get("keyword_tag") or "").strip()
 
         if area_code:
             queryset = queryset.filter(area_code=area_code)
@@ -88,51 +93,62 @@ class TourismPlaceListAPIView(APIView):
             queryset = queryset.filter(category_key=category_key)
         if content_type_id:
             queryset = queryset.filter(content_type_id=content_type_id)
+        if keyword_tag:
+            queryset = queryset.filter(keyword_tags__contains=keyword_tag)
 
-        places = list(queryset[:limit])
-        score_map = {}
+        total = queryset.count()
+        offset = (page - 1) * PAGE_SIZE
+        serializer = TourismPlaceSerializer(queryset[offset:offset + PAGE_SIZE], many=True)
 
-        if places:
-            weather_data = get_weather_data(region or "")
-            weather_score = score_weather_total(
-                sky_condition=weather_data.get("sky_condition", ""),
-                rain_probability=weather_data.get("rain_probability", 100),
-                pm10_level=weather_data.get("pm10_level", ""),
-                pm25_level=weather_data.get("pm25_level", ""),
-            )
-            base_quality_score = score_base_quality()
-            distance_score = score_distance_convenience(0)
+        return Response({
+            "count": total,
+            "page": page,
+            "page_size": PAGE_SIZE,
+            "total_pages": (total + PAGE_SIZE - 1) // PAGE_SIZE,
+            "results": serializer.data,
+        })
 
-            from django.utils import timezone
 
-            now = timezone.localtime()
+class KeywordClassificationAPIView(APIView):
+    """
+    GET /api/places/keyword-classification/
+    저장된 장소들을 프로젝트 키워드 카테고리별로 집계해서 반환합니다.
 
-            for place in places:
-                place_keywords = list(place.keyword_tags or [])
-                if place.category_label and place.category_label not in place_keywords:
-                    place_keywords.append(place.category_label)
+    쿼리 파라미터:
+      - region: 지역 이름으로 필터 (선택)
+    """
 
-                season_time_score = score_season_time_fit(
-                    destination_keywords=place_keywords,
-                    month=now.month,
-                    hour=now.hour,
-                )
-                landmark_score = score_landmark_value(place_keywords)
-                score_map[place.content_id] = build_place_score(
-                    base_quality_score=base_quality_score,
-                    weather_score=weather_score,
-                    distance_score=distance_score,
-                    season_time_score=season_time_score,
-                    landmark_score=landmark_score,
-                    selected_keywords=selected_keywords,
-                    place_keywords=place_keywords,
-                )
+    def get(self, request):
+        region = normalize_region_name((request.GET.get("region") or "").strip())
+        qs = TourismPlace.objects.filter(is_active=True)
 
-        serializer = TourismPlaceSerializer(places, many=True, context={"score_map": score_map})
+        if region:
+            area_code = REGION_AREA_CODE_MAP.get(region, "")
+            if area_code:
+                qs = qs.filter(area_code=area_code)
+
+        tag_counter: Counter = Counter()
+        unclassified_ids: list[int] = []
+
+        for place in qs.only("content_id", "keyword_tags"):
+            tags = place.keyword_tags or []
+            if tags:
+                for tag in tags:
+                    tag_counter[tag] += 1
+            else:
+                unclassified_ids.append(place.content_id)
+
+        summary = {
+            category: tag_counter.get(category, 0)
+            for category in CATEGORY_KEYWORDS
+        }
+        summary["미분류"] = len(unclassified_ids)
+
         return Response(
             {
-                "count": queryset.count(),
-                "results": serializer.data,
+                "region": region or "전체",
+                "total": qs.count(),
+                "classification": summary,
             }
         )
 

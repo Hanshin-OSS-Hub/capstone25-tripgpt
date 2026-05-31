@@ -59,7 +59,15 @@ export function ChatInput({
   };
 
   const handleRemoveKeyword = (keywordToRemove: string) => {
-    onKeywordsChange(selectedKeywords.filter((item) => item !== keywordToRemove));
+    // 카테고리 키워드를 지울 때 해당 세부 키워드도 함께 제거
+    const subKeywords = CATEGORY_TAGS[keywordToRemove] ?? [];
+    const toRemove = new Set([keywordToRemove, ...subKeywords]);
+    onKeywordsChange(selectedKeywords.filter((item) => !toRemove.has(item)));
+
+    // expandedCategories에서도 제거
+    if (expandedCategories.includes(keywordToRemove)) {
+      setExpandedCategories(expandedCategories.filter((item) => item !== keywordToRemove));
+    }
   };
 
   const handleKeyPress = (event: React.KeyboardEvent) => {
@@ -69,15 +77,23 @@ export function ChatInput({
   };
 
   const toggleCategory = (category: string) => {
+    const isSelected = selectedKeywords.includes(category);
     const isExpanded = expandedCategories.includes(category);
+
     if (isExpanded) {
       setExpandedCategories(expandedCategories.filter((item) => item !== category));
     } else {
       setExpandedCategories([...expandedCategories, category]);
     }
 
-    // 부모 카테고리 클릭 시 실제 키워드 선택도 함께 반영
-    handleToggleKeyword(category);
+    if (isSelected) {
+      // 카테고리 해제 시 세부 키워드도 함께 제거
+      const subKeywords = CATEGORY_TAGS[category] ?? [];
+      const toRemove = new Set([category, ...subKeywords]);
+      onKeywordsChange(selectedKeywords.filter((item) => !toRemove.has(item)));
+    } else {
+      onKeywordsChange([...selectedKeywords, category]);
+    }
   };
 
   return (

@@ -3,12 +3,29 @@ import { Badge } from "./ui/badge";
 import { MapPin, Star } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 
+const CATEGORY_TAG_COLORS: Record<string, string> = {
+  자연:     "bg-green-100 text-green-700 border-green-200",
+  랜드마크: "bg-purple-100 text-purple-700 border-purple-200",
+  액티비티: "bg-orange-100 text-orange-700 border-orange-200",
+  스포츠:   "bg-red-100 text-red-700 border-red-200",
+  맛집:     "bg-yellow-100 text-yellow-700 border-yellow-200",
+  이벤트:   "bg-pink-100 text-pink-700 border-pink-200",
+  핫플:     "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200",
+  역사:     "bg-amber-100 text-amber-700 border-amber-200",
+  쇼핑:     "bg-cyan-100 text-cyan-700 border-cyan-200",
+};
+
+const TOP_CATEGORIES = new Set(Object.keys(CATEGORY_TAG_COLORS));
+
+const MAX_VISIBLE_TAGS = 4;
+
 interface DestinationCardProps {
   name: string;
   location: string;
   score: number;
   imageUrl: string;
   category: string;
+  keywordTags?: string[];
   onClick?: () => void;
   showScore?: boolean;
   isPreferred?: boolean;
@@ -24,6 +41,7 @@ export function DestinationCard({
   score,
   imageUrl,
   category,
+  keywordTags = [],
   onClick,
   showScore = true,
   isPreferred = false,
@@ -32,6 +50,15 @@ export function DestinationCard({
   onMouseEnter,
   onMouseLeave,
 }: DestinationCardProps) {
+  // 카테고리 태그는 상단에, 세부 키워드는 하단에 분리
+  const categoryTags = keywordTags.filter((t) => TOP_CATEGORIES.has(t));
+  const subTags = keywordTags.filter((t) => !TOP_CATEGORIES.has(t));
+  const allDisplayTags = [...categoryTags, ...subTags];
+  const visibleTags = allDisplayTags.slice(0, MAX_VISIBLE_TAGS);
+  const hiddenCount = allDisplayTags.length - visibleTags.length;
+
+  const getTagStyle = (tag: string) =>
+    CATEGORY_TAG_COLORS[tag] ?? "bg-blue-50 text-blue-600 border-blue-100";
   const getScoreColor = (score: number) => {
     if (score >= 90) return "bg-gradient-to-r from-green-500 to-emerald-500";
     if (score >= 75) return "bg-gradient-to-r from-blue-500 to-cyan-500";
@@ -109,16 +136,33 @@ export function DestinationCard({
           </div>
         </div>
 
-        <Badge
-          variant="outline"
-          className={`transition-all duration-300 ${
-            isHovered
-              ? "border-blue-300 bg-blue-50 text-blue-700"
-              : "border-gray-200 bg-gray-50 text-gray-700"
-          }`}
-        >
-          {category}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge
+            variant="outline"
+            className={`transition-all duration-300 ${
+              isHovered
+                ? "border-blue-300 bg-blue-50 text-blue-700"
+                : "border-gray-200 bg-gray-50 text-gray-700"
+            }`}
+          >
+            {category}
+          </Badge>
+
+          {visibleTags.map((tag) => (
+            <span
+              key={tag}
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${getTagStyle(tag)}`}
+            >
+              {tag}
+            </span>
+          ))}
+
+          {hiddenCount > 0 && (
+            <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-500">
+              +{hiddenCount}
+            </span>
+          )}
+        </div>
       </div>
     </Card>
   );
