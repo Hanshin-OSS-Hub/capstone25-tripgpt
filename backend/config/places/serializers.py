@@ -4,6 +4,7 @@ from places.models import TourismPlace
 
 class TourismPlaceSerializer(serializers.ModelSerializer):
     sub_category = serializers.SerializerMethodField()
+    recommendation_score = serializers.SerializerMethodField()
 
     class Meta:
         model = TourismPlace
@@ -16,6 +17,7 @@ class TourismPlaceSerializer(serializers.ModelSerializer):
             "sigungu_code",
             "category_key",
             "category_label",
+            "keyword_tags",
             "sub_category",
             "keyword_tags",
             "latitude",

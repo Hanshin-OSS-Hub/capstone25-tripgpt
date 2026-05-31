@@ -26,6 +26,7 @@ class TourismPlace(models.Model):
     first_image = models.URLField(max_length=500, blank=True)
     first_image2 = models.URLField(max_length=500, blank=True)
     region_category_key = models.CharField(max_length=120, blank=True)
+    keyword_tags = models.JSONField(default=list, blank=True)
     overview = models.TextField(blank=True)
     source_modified_time = models.CharField(max_length=30, blank=True)
     keyword_tags = models.JSONField(default=list, blank=True)

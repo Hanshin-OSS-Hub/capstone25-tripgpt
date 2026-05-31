@@ -11,6 +11,7 @@ from places.curated_region_map import (
     REGION_NAME_TO_AREA_CODE,
     flatten_region_keywords,
 )
+from places.keyword_tags import infer_keyword_tags
 from places.models import TourismPlace
 
 
@@ -97,6 +98,13 @@ def build_place_defaults(item):
         "first_image": image_url,
         "first_image2": thumbnail_url,
         "region_category_key": build_region_category_key(item),
+        "keyword_tags": infer_keyword_tags(
+            as_string(item.get("title")),
+            category["category_label"],
+            as_string(item.get("overview")),
+            as_string(item.get("addr1")),
+            as_string(item.get("addr2")),
+        ),
         "overview": as_string(item.get("overview")),
         "source_modified_time": as_string(item.get("modifiedtime")),
         "raw_data": item,
