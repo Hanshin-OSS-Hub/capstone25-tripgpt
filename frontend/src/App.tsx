@@ -68,6 +68,11 @@ interface PlaceApiResult {
   image_url?: string;
   thumbnail_url?: string;
   overview?: string;
+  recommendation_score?: {
+    final_score?: number;
+    category_score?: number;
+    keyword_score?: number;
+  };
 }
 
 interface PlaceSearchResponse {
@@ -196,7 +201,7 @@ function mapPlaceToAttraction(
     id: place.content_id,
     name: place.title,
     location: [place.addr1, place.addr2].filter(Boolean).join(" "),
-    score: baseScore,
+    score: place.recommendation_score?.final_score ?? baseScore,
     imageUrl: place.image_url || place.thumbnail_url || FALLBACK_IMAGE,
     category: place.category_label || "관광지",
     region,
