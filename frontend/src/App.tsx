@@ -185,6 +185,8 @@ export default function App() {
   const [filteredResults, setFilteredResults] = useState<any[]>([]);
   const [selectedAttraction, setSelectedAttraction] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [hoveredAttractionId, setHoveredAttractionId] = useState<number | null>(null);
+  const [isFilterLoading, setIsFilterLoading] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("한국어");
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -238,7 +240,7 @@ export default function App() {
     }
   };
 
-  const fetchPlaces = async (region: string, page: number) => {
+  const fetchPlaces = async (region: string, page: number, keywords: string[] = []) => {
     const areaCode = REGION_AREA_CODES[region];
     if (!areaCode) {
       toast.error(`"${region}" 지역은 아직 지원하지 않습니다.`);
@@ -246,47 +248,27 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(
-        `${API_BASE}/api/places/?area_code=${encodeURIComponent(areaCode)}&page=${page}`
-      );
+      const keywordParams = keywords.map((kw) => `keyword_tag=${encodeURIComponent(kw)}`).join("&");
+      const url = `${API_BASE}/api/places/?area_code=${encodeURIComponent(areaCode)}&page=${page}${keywordParams ? `&${keywordParams}` : ""}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error("fetch failed");
 
       const data: { count: number; page: number; total_pages: number; results: PlaceApiResult[] } =
         await res.json();
 
-      const results = data.results.map(mapPlaceToAttraction);
+      const results = data.results.map(mapPlaceToAttraction).sort((a, b) => b.score - a.score);
 
       setTotalCount(data.count);
       setTotalPages(data.total_pages);
       setCurrentPage(page);
-
-      // 선호 키워드 정렬
-      let preferredKeywords: string[] = [];
-      if (currentUser?.email) {
-        const saved = localStorage.getItem(`tripgpt_keywords_${currentUser.email}`);
-        if (saved) preferredKeywords = JSON.parse(saved);
-      }
-
-      if (preferredKeywords.length > 0) {
-        const matched = results.filter((a) =>
-          preferredKeywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
-        );
-        const unmatched = results.filter((a) =>
-          !preferredKeywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
-        );
-        setSearchResults([
-          ...matched.sort((a, b) => b.score - a.score),
-          ...unmatched.sort((a, b) => b.score - a.score),
-        ]);
-        setFilterKeywords(preferredKeywords);
-      } else {
-        setSearchResults(results.sort((a, b) => b.score - a.score));
-        setFilterKeywords([]);
-        setFilteredResults([]);
-      }
-
+      setSearchResults(results);
       setSearchedRegion(region);
-      toast.success(`${region} 지역 장소 ${data.count}개 중 ${PAGE_SIZE}개를 불러왔습니다.`);
+
+      if (keywords.length > 0) {
+        toast.success(`키워드 필터 결과 ${data.count}개 중 ${PAGE_SIZE}개를 불러왔습니다.`);
+      } else {
+        toast.success(`${region} 지역 장소 ${data.count}개 중 ${PAGE_SIZE}개를 불러왔습니다.`);
+      }
     } catch (e) {
       console.error(e);
       toast.error("장소 데이터를 불러오지 못했습니다.");
@@ -313,25 +295,18 @@ export default function App() {
   const handlePageChange = async (page: number) => {
     setIsSearching(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    await fetchPlaces(searchedRegion, page);
+    await fetchPlaces(searchedRegion, page, filterKeywords);
     setIsSearching(false);
   };
 
-  const handleKeywordsChange = (keywords: string[]) => {
+  const handleKeywordsChange = async (keywords: string[]) => {
     setFilterKeywords(keywords);
-    if (keywords.length === 0) {
-      setFilteredResults([]);
-      return;
-    }
-    const matched = searchResults.filter((a) =>
-      keywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
-    );
-    const unmatched = searchResults.filter(
-      (a) => !keywords.some((kw) => a.tags.some((t: string) => t.includes(kw) || kw.includes(t)))
-    );
-    setFilteredResults([...matched, ...unmatched]);
-    if (matched.length === 0) toast.info("선택한 키워드와 일치하는 관광지가 없습니다.");
-    else toast.success(`키워드와 일치하는 관광지 ${matched.length}개를 찾았습니다.`);
+    setFilteredResults([]);
+    setCurrentPage(1);
+    if (!searchedRegion) return;
+    setIsFilterLoading(true);
+    await fetchPlaces(searchedRegion, 1, keywords);
+    setIsFilterLoading(false);
   };
 
   const isAttractionPreferred = (attraction: any) => {
@@ -522,10 +497,19 @@ export default function App() {
                   <ChatInput onKeywordsChange={handleKeywordsChange} selectedKeywords={filterKeywords} />
                 </div>
 
+                {isFilterLoading && (
+                  <div className="flex items-center justify-center gap-2 py-6 text-blue-600 text-sm">
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    키워드 필터 적용 중...
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {displayResults.map((attraction) => {
+                  {!isFilterLoading && displayResults.map((attraction) => {
                     const isMatched = filterKeywords.length > 0 &&
-                      filterKeywords.some((kw) => attraction.tags.some((t: string) => t.includes(kw) || kw.includes(t)));
+                      filterKeywords.some((kw) => (attraction.keywordTags as string[]).includes(kw));
+                    const isHovered = hoveredAttractionId === attraction.id;
+                    const isDimmed = hoveredAttractionId !== null && hoveredAttractionId !== attraction.id;
                     return (
                       <div key={attraction.id} className={isMatched ? "ring-2 ring-blue-500 rounded-2xl shadow-lg shadow-blue-100" : ""}>
                         <DestinationCard
@@ -537,6 +521,10 @@ export default function App() {
                           keywordTags={attraction.keywordTags}
                           showScore={!!currentUser}
                           isPreferred={isAttractionPreferred(attraction)}
+                          isHovered={isHovered}
+                          isDimmed={isDimmed}
+                          onMouseEnter={() => setHoveredAttractionId(attraction.id)}
+                          onMouseLeave={() => setHoveredAttractionId(null)}
                           onClick={() => { setSelectedAttraction(attraction); setIsDetailOpen(true); }}
                         />
                       </div>

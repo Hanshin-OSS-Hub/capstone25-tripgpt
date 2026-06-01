@@ -1,5 +1,6 @@
 from collections import Counter
 
+from django.db.models import Q
 from django.http import JsonResponse
 from django.views import View
 from rest_framework.response import Response
@@ -73,7 +74,7 @@ class TourismPlaceListAPIView(APIView):
             if not area_code:
                 detailed_region_keyword = region
 
-        keyword_tag = (request.GET.get("keyword_tag") or "").strip()
+        keyword_tags = [t.strip() for t in request.GET.getlist("keyword_tag") if t.strip()]
 
         if area_code:
             queryset = queryset.filter(area_code=area_code)
@@ -93,8 +94,11 @@ class TourismPlaceListAPIView(APIView):
             queryset = queryset.filter(category_key=category_key)
         if content_type_id:
             queryset = queryset.filter(content_type_id=content_type_id)
-        if keyword_tag:
-            queryset = queryset.filter(keyword_tags__contains=keyword_tag)
+        if keyword_tags:
+            q = Q()
+            for tag in keyword_tags:
+                q |= Q(keyword_tags__contains=tag)
+            queryset = queryset.filter(q)
 
         total = queryset.count()
         offset = (page - 1) * PAGE_SIZE
