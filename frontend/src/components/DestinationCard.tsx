@@ -31,6 +31,7 @@ interface DestinationCardProps {
   isPreferred?: boolean;
   isDimmed?: boolean;
   isHovered?: boolean;
+  isMatched?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }
@@ -47,6 +48,7 @@ export function DestinationCard({
   isPreferred = false,
   isDimmed = false,
   isHovered = false,
+  isMatched = false,
   onMouseEnter,
   onMouseLeave,
 }: DestinationCardProps) {
@@ -69,7 +71,9 @@ export function DestinationCard({
   return (
     <Card
       className={`overflow-hidden cursor-pointer group bg-white rounded-2xl transition-all duration-300 shadow-md ${
-        isPreferred
+        isMatched
+          ? "ring-2 ring-blue-500 shadow-lg shadow-blue-100"
+          : isPreferred
           ? "border-2 border-blue-500 ring-2 ring-blue-200"
           : "border border-gray-100"
       } ${

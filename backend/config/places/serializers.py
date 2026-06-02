@@ -19,13 +19,15 @@ class TourismPlaceSerializer(serializers.ModelSerializer):
             "category_label",
             "keyword_tags",
             "sub_category",
-            "keyword_tags",
+            "recommendation_score",
             "latitude",
             "longitude",
             "image_url",
             "thumbnail_url",
         ]
-        # overview, homepage, tel, zipcode, cat1/2/3, source_modified_time 제거
 
     def get_sub_category(self, obj):
         return obj.cat3 or obj.cat2 or obj.cat1 or ""
+
+    def get_recommendation_score(self, obj):
+        return getattr(obj, "recommendation_score", None)

@@ -511,7 +511,7 @@ export default function App() {
                     const isHovered = hoveredAttractionId === attraction.id;
                     const isDimmed = hoveredAttractionId !== null && hoveredAttractionId !== attraction.id;
                     return (
-                      <div key={attraction.id} className={isMatched ? "ring-2 ring-blue-500 rounded-2xl shadow-lg shadow-blue-100" : ""}>
+                      <div key={attraction.id}>
                         <DestinationCard
                           name={attraction.name}
                           location={attraction.location}
@@ -521,6 +521,7 @@ export default function App() {
                           keywordTags={attraction.keywordTags}
                           showScore={!!currentUser}
                           isPreferred={isAttractionPreferred(attraction)}
+                          isMatched={isMatched}
                           isHovered={isHovered}
                           isDimmed={isDimmed}
                           onMouseEnter={() => setHoveredAttractionId(attraction.id)}
